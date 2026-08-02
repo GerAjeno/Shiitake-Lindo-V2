@@ -68,5 +68,5 @@ static EstadoDetalladoAC construirEstado(const MideaLANClient& ac, bool conectad
     return e;
 }
 
-EstadoDetalladoAC AcController::obtenerEstadoAtriles() const { return construirEstado(_acAtriles, _acAtriles.estaConectado()); }
-EstadoDetalladoAC AcController::obtenerEstadoDescanso() const { return construirEstado(_acDescanso, _acDescanso.estaConectado()); }
+EstadoDetalladoAC AcController::obtenerEstadoAtriles() { return construirEstado(_acAtriles, _acAtriles.estaConectado()); }
+EstadoDetalladoAC AcController::obtenerEstadoDescanso() { return construirEstado(_acDescanso, _acDescanso.estaConectado()); }

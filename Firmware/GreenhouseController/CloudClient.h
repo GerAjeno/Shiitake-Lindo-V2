@@ -54,7 +54,7 @@ public:
 
     void enviarTelemetria(const TelemetriaActual& t);
     void enviarSensores(const MatrizSensores& m);
-    void enviarLoteHistorial(const String& jsonLote); // ya serializado por Tasks.cpp (ver ahí el detalle de campos)
+    void enviarLoteHistorial(String jsonLote); // ya serializado por Tasks.cpp; por valor: WebSocketsClient::sendTXT() exige String& no-const
     void enviarAck(const String& orderId, bool ejecutado, const String& error = "");
 
     // INotificadorEventos

@@ -9,6 +9,7 @@
 
 #include "RelayModbusClient.h"
 #include "INotificadorEventos.h"
+#include "SensorManager.h"
 #include "Types.h"
 
 class HumidifierController {

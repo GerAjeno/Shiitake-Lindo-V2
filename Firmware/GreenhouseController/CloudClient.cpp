@@ -199,7 +199,7 @@ void CloudClient::enviarSensores(const MatrizSensores& m) {
     enviarJson(doc);
 }
 
-void CloudClient::enviarLoteHistorial(const String& jsonLoteYaListo) {
+void CloudClient::enviarLoteHistorial(String jsonLoteYaListo) {
     if (!_conectado) return;
     _ws.sendTXT(jsonLoteYaListo);
 }

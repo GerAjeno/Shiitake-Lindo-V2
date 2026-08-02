@@ -24,10 +24,12 @@ public:
     void actualizarControl(ConfiguracionZona& configAtriles, ConfiguracionZona& configDescanso,
                             uint32_t intervaloConmutacionMinimoSeg);
 
-    EstadoDetalladoAC obtenerEstadoAtriles() const;
-    EstadoDetalladoAC obtenerEstadoDescanso() const;
-    bool comunicacionOkAtriles() const { return _acAtriles.estaConectado(); }
-    bool comunicacionOkDescanso() const { return _acDescanso.estaConectado(); }
+    // No son const: MideaLANClient::estaConectado() consulta WiFiClient::connected(), que la
+    // librería de Arduino no declara const, así que estas consultas tampoco pueden serlo.
+    EstadoDetalladoAC obtenerEstadoAtriles();
+    EstadoDetalladoAC obtenerEstadoDescanso();
+    bool comunicacionOkAtriles() { return _acAtriles.estaConectado(); }
+    bool comunicacionOkDescanso() { return _acDescanso.estaConectado(); }
 
 private:
     MideaLANClient _acAtriles;
