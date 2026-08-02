@@ -1,44 +1,104 @@
-# Shiitake-Lindo (V2)
+# 🍄 Shiitake-Lindo V2
 
-Reemplazo completo del sistema SCADA/IoT de invernadero de Shiitake. Ver el plan de migración completo en `docs/PLAN_MIGRACION.md`.
+Plataforma SCADA/IoT para el control automatizado de un invernadero de Shiitake (*Lentinula edodes*). Reemplazo completo, reescrito desde cero, del sistema anterior — firmware, backend y frontend nuevos, misma apariencia para el operador.
 
-## Estructura
+El sistema gestiona dos zonas del cultivo de forma independiente:
+1. **Atriles** — fructificación, control estricto de humedad alta.
+2. **Descanso** — recuperación/expansión de micelio, control térmico e higrométrico.
+
+---
+
+## Estado actual
+
+🟡 **Marcha blanca** en [`prueba.ger-cloud.cc`](https://prueba.ger-cloud.cc). Tras una semana de validación se promueve a `shiitake.ger-cloud.cc` como dominio de producción.
+
+---
+
+## Arquitectura
+
+```mermaid
+graph TD
+    subgraph "Servidor (Docker Compose detrás de Cloudflare Tunnel)"
+        FE[Next.js 14 Frontend]
+        BE[Backend Node/TS<br/>REST + WebSocket]
+        PG[(PostgreSQL)]
+        CD[Caddy reverse proxy]
+    end
+
+    subgraph "Invernadero — ESP32-S3"
+        CTRL[Controlador Central]
+        DHT[DHT22 x4 — Atriles y Descanso]
+        MQ[MQ135 x2 — Calidad de aire]
+        RELE[Módulo de relés Modbus RTU/UART]
+        AC[A/C Midea/Khöne — LAN local]
+    end
+
+    subgraph Identidad
+        FB[Firebase Authentication<br/>solo login]
+    end
+
+    FE <-->|HTTPS + WSS| CD
+    CD --> BE
+    BE <--> PG
+    BE <-->|WSS, token propio| CTRL
+    FE -.->|ID token| FB
+    BE -.->|verifica ID token| FB
+    CTRL <--> DHT
+    CTRL <--> MQ
+    CTRL --> RELE
+    CTRL <-->|LAN local, AES| AC
+```
+
+- **Auth**: Firebase Authentication (proyecto `invernadero-shiitake-iot`) **solo para login** — mismos correos/contraseñas de siempre. El backend verifica el ID token y resuelve el rol (`admin` / `operador` / `lectura`) contra Postgres. Sin Firebase Realtime Database.
+- **Tiempo real**: un único WebSocket (`/ws`) — canal navegador (Firebase ID token) y canal dispositivo (token propio del ESP32, nunca Firebase).
+- **Comandos manuales**: confirmados por ACK real del dispositivo en máx. 5s — nunca se asume éxito sin confirmación.
+- **Firmware**: control 100% local y autónomo si se pierde Internet; solo el servidor gana al reconectar (sin comparar versiones). Redundancia dual de sensores por zona.
+- **OTA**: firmada (SHA-256 + Ed25519) — el ESP32 rechaza cualquier binario no firmado por el servidor.
+- **Despliegue**: Docker Compose (`infra/docker-compose.yml`) — Postgres, Backend, Frontend, Caddy y `cloudflared` en el mismo stack, sin puertos expuestos a internet salvo por el túnel.
+
+## Estructura del repositorio
 
 ```text
 Shiitake-Lindo-V2/
-├── Firmware/GreenhouseController/   # Firmware ESP32-S3 (Arduino, reescrito desde cero)
+├── Firmware/GreenhouseController/   # Firmware ESP32-S3 (Arduino/C++, ver su propio README)
 ├── Backend/                         # API REST + WebSocket + Postgres (Node/TypeScript)
-├── Frontend/                        # Next.js 14 (SCADA web)
+├── Frontend/                        # Next.js 14 (panel SCADA)
 ├── Shared/                          # Tipos TypeScript compartidos Backend/Frontend
-├── infra/                           # docker-compose, Caddy, migraciones SQL
-└── scripts/                         # Scripts de migración de datos y utilidades
+├── infra/                           # docker-compose, Caddyfile, migraciones SQL
+└── docs/
+    ├── PLAN_MIGRACION.md            # Plan completo de migración (contexto y decisiones)
+    └── RUNBOOK_INFRA.md             # Guía paso a paso de despliegue en el servidor
 ```
 
-## Arquitectura resumida
-
-- **Auth**: Firebase Authentication (proyecto existente `invernadero-shiitake-iot`) solo para login. El backend verifica el ID token y resuelve el rol (`admin` / `operador` / `lectura`) contra Postgres.
-- **Datos**: PostgreSQL. Sin Firebase Realtime Database.
-- **Tiempo real**: WebSocket único (`/ws`) — un canal para navegadores, otro para el ESP32.
-- **Firmware**: ESP32-S3, control 100% local y autónomo si se pierde Internet. Ver `Firmware/GreenhouseController/README.md`.
-- **Despliegue**: Docker Compose (`infra/docker-compose.yml`) detrás de Cloudflare Tunnel.
-
-## Desarrollo
+## Desarrollo local
 
 ```bash
-cd Backend && npm install && npm run dev
-cd Frontend && npm install && npm run dev
+cd Backend && npm install && npm run dev    # http://localhost:3001
+cd Frontend && npm install && npm run dev   # http://localhost:3000
 ```
 
 ## Despliegue en el servidor
 
+Ver `docs/RUNBOOK_INFRA.md` para la guía completa (VM, Docker, Cloudflare Tunnel, Firebase, claves OTA). Resumen:
+
 ```bash
-git clone <repo> && cd Shiitake-Lindo-V2
-cp infra/.env.example infra/.env   # completar secretos (ver docs/PLAN_MIGRACION.md)
-docker compose -f infra/docker-compose.yml up -d --build
+git clone https://github.com/GerAjeno/Shiitake-Lindo-V2.git && cd Shiitake-Lindo-V2
+cp infra/.env.example infra/.env   # completar secretos
+docker compose -f infra/docker-compose.yml --env-file infra/.env up -d --build
 ```
 
-## Nota de aislamiento
+## Firmware
 
-Este proyecto se desarrolla exclusivamente en esta sesión. No se debe mezclar con otras
-carpetas o intentos paralelos (ej. `ShiitakeLindoV3`) — esa carpeta es de otra sesión no
-autorizada y se ignora por completo.
+Ver `Firmware/GreenhouseController/README.md` para librerías, configuración de placa (ESP32-S3 N16R8, PSRAM OPI, partition scheme custom) y qué completar en `Config.h` antes de compilar.
+
+## Seguridad
+
+- Ninguna credencial real (WiFi, tokens, contraseñas) se commitea al repo — `Config.h` del firmware se mantiene local con `git update-index --skip-worktree` una vez completado con valores reales.
+- El endpoint de subida de firmware exige rol `admin` autenticado; el binario se firma en el servidor antes de notificar al dispositivo.
+- Auditoría inmutable de toda acción manual (usuario, IP, fecha, valor anterior/nuevo) en `sistema_logs` — sin endpoint de borrado, ni para administradores.
+
+---
+
+<div align="center">
+  <p><b>Desarrollado por German Marambio © 2026</b></p>
+</div>
