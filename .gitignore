@@ -1,0 +1,35 @@
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.env
+.env.*
+!.env.example
+
+# Arduino / PlatformIO / IDEs
+*.hex
+*.bin
+*.elf
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# Secretos (nunca deben versionarse)
+**/serviceAccountKey*.json
+**/firebase-service-account*.json
+**/ota-signing-key*
+**/*.pem
+**/*.key
+infra/secrets/
+
+# Postgres data volume si se monta local
+infra/postgres/data/
+
+# Build artifacts
+*.tsbuildinfo

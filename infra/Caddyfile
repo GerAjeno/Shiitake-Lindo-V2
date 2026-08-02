@@ -1,0 +1,10 @@
+# Servimos solo HTTP puro puertas adentro: Cloudflare Tunnel ya termina TLS en el borde
+# hacia el navegador, así que Caddy NO debe intentar emitir su propio certificado ACME
+# (no hay puerto 80/443 expuesto a internet directamente, solo alcanzable vía el túnel).
+:80 {
+	# WebSocket y REST van al backend; todo lo demás (la web) al frontend Next.js.
+	@backend path /api/* /ws
+	reverse_proxy @backend backend:3001
+
+	reverse_proxy frontend:3000
+}
