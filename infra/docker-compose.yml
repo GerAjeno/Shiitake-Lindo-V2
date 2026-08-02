@@ -8,6 +8,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Solo accesible desde la propia VM (loopback) — necesario para correr los scripts de
+      # Backend/scripts/*.js directo en el servidor (provisionar dispositivo, generar clave OTA,
+      # migrar datos). No queda expuesto a internet ni a la red local.
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
       interval: 5s
