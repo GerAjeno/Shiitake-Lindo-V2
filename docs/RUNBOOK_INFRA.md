@@ -74,6 +74,19 @@ docker compose -f infra/docker-compose.yml logs -f backend
 
 Verificar `https://prueba.ger-cloud.cc/api/health` → `{"ok":true}` antes de seguir con el resto de la migración.
 
-## 9. Respaldo de emergencia
+## 9. Migrar configuración e historial reciente desde el Firebase viejo
+
+```bash
+cd Backend
+DATABASE_URL=postgres://shiitake:TU_CLAVE@localhost:5432/shiitake \
+FIREBASE_SERVICE_ACCOUNT_PATH=../infra/secrets/firebase-service-account.json \
+DIAS_HISTORIAL_RECIENTE=7 \
+npm run migrar:firebase
+```
+
+Migra config de ambas zonas + últimos 7 días de historial + alertas activas. Los 3 años
+completos de histórico quedan para después (aprobado explícitamente). El RTDB viejo no se toca.
+
+## 10. Respaldo de emergencia
 
 Confirmar que el `.bin` del firmware estable actual está accesible localmente para reflashear por USB si algo falla durante las pruebas de hoy.

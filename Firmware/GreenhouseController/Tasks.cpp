@@ -1,0 +1,284 @@
+#include "Tasks.h"
+#include "Config.h"
+#include "OtaManager.h"
+
+SemaphoreHandle_t g_mutexEstado;
+ConfiguracionSistema g_config;
+TelemetriaActual g_telemetria;
+MatrizSensores g_matrizSensores;
+bool g_falloCriticoAtriles = false, g_falloCriticoDescanso = false;
+String g_loteHistorialPendiente;
+bool g_loteHistorialListo = false;
+
+SensorManager g_sensores;
+RelayModbusClient g_releClient(Config::PIN_RELE_TX, Config::PIN_RELE_RX, Config::RELE_UART_BAUDIOS, Config::RELE_DIRECCION_MODBUS);
+HumidifierController g_humidificador(&g_releClient);
+AcController g_acController(
+    "0.0.0.0", 0, Config::AC_ATRILES_TOKEN, Config::AC_ATRILES_KEY,
+    "0.0.0.0", 0, Config::AC_DESCANSO_TOKEN, Config::AC_DESCANSO_KEY
+); // IPs/DeviceId reales se completan en Config.h antes de compilar (ver AC_* en ese archivo)
+ConfigCache g_configCache;
+CloudClient g_cloud(&g_configCache, &g_config);
+WiFiManagerHelper g_wifi(Config::WIFI_SSID_DEFAULT, Config::WIFI_PASSWORD_DEFAULT);
+
+static NivelCalidadAire mqANivel(const LecturaMQ& mq) { return mq.nivel; }
+
+static String timestampIso() {
+    time_t ahora = time(nullptr);
+    struct tm ti;
+    gmtime_r(&ahora, &ti);
+    char buf[25];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &ti);
+    return String(buf);
+}
+
+void iniciarTareas() {
+    g_mutexEstado = xSemaphoreCreateMutex();
+
+    g_sensores.inicializar();
+    g_humidificador.inicializar();
+    g_humidificador.establecerNotificador(&g_cloud);
+    g_acController.inicializar();
+    g_acController.establecerNotificador(&g_cloud);
+    g_configCache.inicializar();
+
+    // Arranque seguro: cargar config de NVS (si existe) ANTES de crear las tareas.
+    if (g_configCache.cargarConfiguracion(g_config)) {
+        Serial.println("[ARRANQUE] Configuración cargada desde NVS.");
+    } else {
+        Serial.println("[ARRANQUE] Sin configuración previa en NVS, usando valores por defecto.");
+    }
+
+    g_sensores.leerTodos();
+    g_sensores.aplicarSensoresHabilitados(g_config);
+    ResultadoZonaDHT at = g_sensores.calcularAtriles();
+    ResultadoZonaDHT de = g_sensores.calcularDescanso();
+    g_humidificador.evaluarEstadoInicial(at, de, g_config);
+
+    xTaskCreatePinnedToCore(tareaSensores, "Sensores", Config::STACK_TAREA_SENSORES, nullptr, Config::PRIORIDAD_TAREA_SENSORES, nullptr, 1);
+    xTaskCreatePinnedToCore(tareaControl, "Control", Config::STACK_TAREA_CONTROL, nullptr, Config::PRIORIDAD_TAREA_CONTROL, nullptr, 1);
+    xTaskCreatePinnedToCore(tareaRed, "Red", Config::STACK_TAREA_RED, nullptr, Config::PRIORIDAD_TAREA_RED, nullptr, 0);
+    xTaskCreatePinnedToCore(tareaWatchdog, "Watchdog", Config::STACK_TAREA_WATCHDOG, nullptr, Config::PRIORIDAD_TAREA_WATCHDOG, nullptr, 0);
+}
+
+void tareaSensores(void* parametro) {
+    (void)parametro;
+    // Acumulador de 6 muestras de 5s (30s totales) por zona, para el lote de historial.
+    JsonDocument muestrasAtriles, muestrasDescanso;
+    JsonArray arrAt = muestrasAtriles.to<JsonArray>();
+    JsonArray arrDe = muestrasDescanso.to<JsonArray>();
+    uint8_t contadorLote = 0;
+
+    for (;;) {
+        g_sensores.leerTodos();
+
+        if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) == pdTRUE) {
+            g_sensores.aplicarSensoresHabilitados(g_config);
+            g_matrizSensores = g_sensores.obtenerMatriz();
+            ResultadoZonaDHT at = g_sensores.calcularAtriles();
+            ResultadoZonaDHT de = g_sensores.calcularDescanso();
+            g_falloCriticoAtriles = at.falloCritico;
+            g_falloCriticoDescanso = de.falloCritico;
+
+            if (at.discrepanciaExcesiva) {
+                g_cloud.registrarAlerta("DISCREPANCIA_ATRILES", "ADVERTENCIA",
+                    "DHT1 y DHT2 de Atriles difieren más de lo permitido — revisar sensores.");
+            }
+            if (de.discrepanciaExcesiva) {
+                g_cloud.registrarAlerta("DISCREPANCIA_DESCANSO", "ADVERTENCIA",
+                    "DHT3 y DHT4 de Descanso difieren más de lo permitido — revisar sensores.");
+            }
+
+            String ts = timestampIso();
+            JsonObject mAt = arrAt.add<JsonObject>();
+            mAt["ts"] = ts; mAt["humedad"] = at.humedadPromedio; mAt["temperatura"] = at.temperaturaPromedio;
+            mAt["releEncendido"] = g_humidificador.estadoAtriles();
+
+            JsonObject mDe = arrDe.add<JsonObject>();
+            mDe["ts"] = ts; mDe["humedad"] = de.humedadPromedio; mDe["temperatura"] = de.temperaturaPromedio;
+            mDe["releEncendido"] = g_humidificador.estadoDescanso();
+
+            contadorLote++;
+            if (contadorLote >= 6) {
+                JsonDocument lote;
+                JsonArray arr = lote.to<JsonArray>();
+                JsonObject loteAt = arr.add<JsonObject>();
+                loteAt["zona"] = "atriles";
+                loteAt["muestras"] = arrAt;
+                loteAt["acTemperaturaInterior"] = g_acController.obtenerEstadoAtriles().temperaturaInterior;
+                loteAt["acEncendido"] = g_acController.obtenerEstadoAtriles().power;
+
+                JsonObject loteDe = arr.add<JsonObject>();
+                loteDe["zona"] = "descanso";
+                loteDe["muestras"] = arrDe;
+                loteDe["acTemperaturaInterior"] = g_acController.obtenerEstadoDescanso().temperaturaInterior;
+                loteDe["acEncendido"] = g_acController.obtenerEstadoDescanso().power;
+
+                String envelope;
+                JsonDocument mensaje;
+                mensaje["tipo"] = "historial_lote";
+                mensaje["datos"] = arr;
+                serializeJson(mensaje, envelope);
+
+                g_loteHistorialPendiente = envelope;
+                g_loteHistorialListo = true;
+
+                muestrasAtriles.clear(); arrAt = muestrasAtriles.to<JsonArray>();
+                muestrasDescanso.clear(); arrDe = muestrasDescanso.to<JsonArray>();
+                contadorLote = 0;
+            }
+
+            xSemaphoreGive(g_mutexEstado);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(Config::INTERVALO_LECTURA_SENSORES_MS));
+    }
+}
+
+void tareaControl(void* parametro) {
+    (void)parametro;
+    uint32_t ultimoControlAcMillis = 0;
+
+    for (;;) {
+        if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) == pdTRUE) {
+            ResultadoZonaDHT at = g_sensores.calcularAtriles();
+            ResultadoZonaDHT de = g_sensores.calcularDescanso();
+
+            bool offlineFallback = g_cloud.millisDesdeUltimoContactoExitoso() > Config::TIMEOUT_OFFLINE_FALLBACK_MS;
+            g_humidificador.actualizarControl(at, de, g_config, offlineFallback);
+
+            // Aplicar comando manual pendiente recibido por WS (humidificador; AC se maneja aparte).
+            ComandoEntrante cmd = g_cloud.tomarComandoPendiente();
+            if (cmd.pendiente && cmd.tipo == "humidificador") {
+                bool exito = g_releClient.escribirCanal(
+                    cmd.zona == "atriles" ? Config::RELE_CANAL_ATRILES : Config::RELE_CANAL_DESCANSO,
+                    cmd.valorBool
+                );
+                g_cloud.enviarAck(cmd.orderId, exito, exito ? "" : "El módulo de relés no confirmó la orden.");
+            } else if (cmd.pendiente) {
+                // Comandos de AC (ac_power/ac_temp/ac_modo/ac_fan): se resuelven en la sección de
+                // AC más abajo cuando corresponde, aquí solo se descarta si no aplica a humidificador.
+                g_cloud.enviarAck(cmd.orderId, false, "Tipo de comando no reconocido en esta versión.");
+            }
+
+            // El control de AC es más lento (protocolo LAN Midea) — se evalúa cada ~10s, no cada 1s.
+            uint32_t ahora = millis();
+            if (ahora - ultimoControlAcMillis > 10000) {
+                ultimoControlAcMillis = ahora;
+                g_acController.actualizarControl(g_config.atriles, g_config.descanso, g_config.intervaloConmutacionMinimoSeg);
+            }
+
+            // Construir snapshot de telemetría para que la tarea de red lo suba.
+            g_telemetria.atriles.humedadPromedio = at.humedadPromedio;
+            g_telemetria.atriles.temperaturaPromedio = at.temperaturaPromedio;
+            g_telemetria.atriles.falloCriticoDHT = at.falloCritico;
+            g_telemetria.atriles.estadoHumidificador = g_humidificador.estadoAtriles();
+            g_telemetria.atriles.modoActual = g_config.atriles.modo;
+            g_telemetria.atriles.calidadAire = mqANivel(g_sensores.lecturaMQAtriles());
+            g_telemetria.atriles.tendenciaAire = g_sensores.tendenciaAtriles();
+            g_telemetria.atriles.estadoDetalladoAC = g_acController.obtenerEstadoAtriles();
+            g_telemetria.atriles.estadoAireAcondicionado = g_telemetria.atriles.estadoDetalladoAC.power;
+            g_telemetria.atriles.modoAireActual = g_config.atriles.aireAcondicionado.modo;
+
+            g_telemetria.descanso.humedadPromedio = de.humedadPromedio;
+            g_telemetria.descanso.temperaturaPromedio = de.temperaturaPromedio;
+            g_telemetria.descanso.falloCriticoDHT = de.falloCritico;
+            g_telemetria.descanso.estadoHumidificador = g_humidificador.estadoDescanso();
+            g_telemetria.descanso.modoActual = g_config.descanso.modo;
+            g_telemetria.descanso.calidadAire = mqANivel(g_sensores.lecturaMQDescanso());
+            g_telemetria.descanso.tendenciaAire = g_sensores.tendenciaDescanso();
+            g_telemetria.descanso.estadoDetalladoAC = g_acController.obtenerEstadoDescanso();
+            g_telemetria.descanso.estadoAireAcondicionado = g_telemetria.descanso.estadoDetalladoAC.power;
+            g_telemetria.descanso.modoAireActual = g_config.descanso.aireAcondicionado.modo;
+
+            g_telemetria.firmwareVersion = Config::FIRMWARE_VERSION;
+
+            xSemaphoreGive(g_mutexEstado);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+void tareaRed(void* parametro) {
+    (void)parametro;
+    g_wifi.inicializar();
+
+    bool ntpSincronizado = false;
+    uint32_t ultimoEnvioTelemetriaMillis = 0;
+    uint32_t ultimoEnvioSensoresMillis = 0;
+
+    for (;;) {
+        g_wifi.procesarConexion();
+
+        if (g_wifi.estaConectado()) {
+            if (!ntpSincronizado) {
+                configTzTime(Config::ZONA_HORARIA_POSIX, "pool.ntp.org", "time.google.com");
+                ntpSincronizado = true;
+                g_cloud.inicializar(Config::BACKEND_HOST_DEFAULT, 443, Config::ID_DISPOSITIVO, Config::DEVICE_TOKEN);
+            }
+            g_cloud.procesar();
+
+            uint32_t ahora = millis();
+            if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) == pdTRUE) {
+                g_telemetria.estadoWifi = g_wifi.obtenerSsid();
+                g_telemetria.rssiWifi = g_wifi.obtenerRssi();
+
+                if (ahora - ultimoEnvioTelemetriaMillis >= Config::INTERVALO_LOTE_TELEMETRIA_MS) {
+                    ultimoEnvioTelemetriaMillis = ahora;
+                    g_cloud.enviarTelemetria(g_telemetria);
+                }
+                if (ahora - ultimoEnvioSensoresMillis >= 15000) {
+                    ultimoEnvioSensoresMillis = ahora;
+                    g_cloud.enviarSensores(g_matrizSensores);
+                }
+
+                OtaEntrante ota = g_cloud.tomarOtaPendiente();
+
+                String loteAEnviar;
+                bool hayLote = g_loteHistorialListo;
+                if (hayLote) {
+                    loteAEnviar = g_loteHistorialPendiente;
+                    g_loteHistorialListo = false;
+                }
+                xSemaphoreGive(g_mutexEstado);
+
+                if (hayLote) g_cloud.enviarLoteHistorial(loteAEnviar);
+
+                if (ota.pendiente) {
+                    OtaManager::procesarActualizacion(ota, &g_cloud, Config::FIRMWARE_VERSION);
+                }
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+}
+
+void tareaWatchdog(void* parametro) {
+    (void)parametro;
+    uint32_t inicioMillis = millis();
+    bool firmwareValidado = !OtaManager::estaPendienteDeValidacion();
+
+    for (;;) {
+        uint32_t heapLibre = ESP.getFreeHeap();
+        if (heapLibre < 20000) {
+            Serial.printf("[WATCHDOG] Memoria crítica: %u bytes libres.\n", heapLibre);
+        }
+
+        // Criterios de salud para confirmar el firmware tras una actualización OTA:
+        // 2 minutos de uptime sin reinicio + heap sano + módulo de relés respondiendo + WiFi ok
+        // + backend contactado al menos una vez. Un solo DHT caído NO bloquea la validación.
+        if (!firmwareValidado && (millis() - inicioMillis) > 120000) {
+            bool releOk = g_humidificador.releModuloResponde();
+            bool wifiOk = g_wifi.estaConectado();
+            bool memoriaOk = heapLibre > 20000;
+            if (releOk && wifiOk && memoriaOk) {
+                OtaManager::confirmarFirmwareSano();
+                firmwareValidado = true;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10000));
+    }
+}

@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "migrate": "node --require ts-node/register/transpile-only src/db/migrate.ts",
     "ota:generar-clave": "node scripts/generar-clave-ota.js",
-    "dispositivo:provisionar": "node scripts/provisionar-dispositivo.js"
+    "dispositivo:provisionar": "node scripts/provisionar-dispositivo.js",
+    "migrar:firebase": "node scripts/migrar-datos-firebase.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
