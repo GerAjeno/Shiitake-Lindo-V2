@@ -56,6 +56,7 @@ export interface EstadoDetalladoAC {
   velocidadVentilador: 'Auto' | 'High' | 'Medium' | 'Low';
   temperaturaObjetivo: number;
   temperaturaInterior: number;
+  comunicacionOk: boolean;
 }
 
 export interface ConfiguracionAireAcondicionado {

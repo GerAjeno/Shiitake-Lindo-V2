@@ -17,7 +17,7 @@ import type {
   MensajeServidorACliente,
   TipoComandoManual,
   ComandoManual,
-} from '../../../Shared/types';
+} from '../shared/types';
 
 interface ClienteNavegador {
   ws: WebSocket;
@@ -50,7 +50,7 @@ export function enviarConfiguracionADispositivo(configuracion: unknown) {
 }
 
 /** Usado por la ruta de subida de firmware para ordenar al ESP32 que inicie la descarga OTA. */
-export function enviarOtaADispositivo(estadoOta: import('../../../Shared/types').EstadoOta) {
+export function enviarOtaADispositivo(estadoOta: import('../shared/types').EstadoOta) {
   if (!dispositivoConectado()) return false;
   dispositivoActivo!.ws.send(JSON.stringify({ tipo: 'ota', datos: estadoOta }));
   return true;

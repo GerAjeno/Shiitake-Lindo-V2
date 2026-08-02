@@ -169,6 +169,7 @@ void CloudClient::enviarTelemetria(const TelemetriaActual& t) {
         ac["velocidadVentilador"] = z.estadoDetalladoAC.velocidadVentilador;
         ac["temperaturaObjetivo"] = z.estadoDetalladoAC.temperaturaObjetivo;
         ac["temperaturaInterior"] = z.estadoDetalladoAC.temperaturaInterior;
+        ac["comunicacionOk"] = z.estadoDetalladoAC.comunicacionOk;
     };
     volcarZona(d["atriles"].to<JsonObject>(), t.atriles);
     volcarZona(d["descanso"].to<JsonObject>(), t.descanso);

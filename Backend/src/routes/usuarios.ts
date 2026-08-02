@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { pool } from '../db/pool';
 import { requireRole } from '../auth/middleware';
 import { admin } from '../auth/firebase';
-import type { RolUsuario } from '../../../Shared/types';
+import type { RolUsuario } from '../shared/types';
 
 export const usuariosRouter = Router();
 

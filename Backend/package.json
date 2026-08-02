@@ -4,7 +4,9 @@
   "description": "API REST + WebSocket + Postgres para Shiitake-Lindo V2",
   "main": "dist/index.js",
   "scripts": {
+    "predev": "rm -rf src/shared && cp -r ../Shared src/shared",
     "dev": "node --require ts-node/register/transpile-only src/index.ts",
+    "prebuild": "rm -rf src/shared && cp -r ../Shared src/shared",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "migrate": "node --require ts-node/register/transpile-only src/db/migrate.ts",

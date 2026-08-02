@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { verificarIdToken } from './firebase';
 import { pool } from '../db/pool';
-import type { RolUsuario } from '../../../Shared/types';
+import type { RolUsuario } from '../shared/types';
 
 export interface UsuarioAutenticado {
   uid: string;

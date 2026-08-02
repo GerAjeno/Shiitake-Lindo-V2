@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { pool } from '../db/pool';
 import { requireRole } from '../auth/middleware';
 import { enviarConfiguracionADispositivo, difundirANavegadores } from '../ws/hub';
-import type { ConfiguracionSistema, ConfiguracionZona, NombreZona } from '../../../Shared/types';
+import type { ConfiguracionSistema, ConfiguracionZona, NombreZona } from '../shared/types';
 
 export const configRouter = Router();
 

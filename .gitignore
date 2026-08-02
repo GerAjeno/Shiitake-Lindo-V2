@@ -33,3 +33,7 @@ infra/postgres/data/
 
 # Build artifacts
 *.tsbuildinfo
+
+# Copia local de Shared/ generada por Backend/package.json (predev/prebuild) para que tsc
+# no falle con TS6059 (rootDir) — la fuente de verdad sigue siendo /Shared en la raíz.
+Backend/src/shared/
