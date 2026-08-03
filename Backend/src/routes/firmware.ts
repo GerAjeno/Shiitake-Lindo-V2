@@ -3,7 +3,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { pool } from '../db/pool';
-import { requireRole } from '../auth/middleware';
+import { requireAuth, requireRole } from '../auth/middleware';
 import { calcularSha256, firmarFirmware } from '../ota/signing';
 import { enviarOtaADispositivo } from '../ws/hub';
 
@@ -15,7 +15,7 @@ const VERSIONES_A_CONSERVAR = 2;
 
 fs.mkdirSync(FIRMWARE_DIR, { recursive: true });
 
-firmwareRouter.get('/', requireRole('admin'), async (_req, res) => {
+firmwareRouter.get('/', requireAuth, requireRole('admin'), async (_req, res) => {
   const { rows } = await pool.query(
     'SELECT version, sha256, subido_por AS "subidoPor", subido_en AS "subidoEn" FROM firmwares ORDER BY subido_en DESC'
   );
@@ -34,6 +34,7 @@ firmwareRouter.get('/:version/download', (req, res) => {
 
 firmwareRouter.post(
   '/',
+  requireAuth,
   requireRole('admin'),
   express.raw({ type: '*/*', limit: '16mb' }),
   async (req, res) => {
