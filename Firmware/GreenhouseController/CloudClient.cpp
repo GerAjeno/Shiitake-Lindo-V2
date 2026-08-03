@@ -156,13 +156,13 @@ void CloudClient::enviarTelemetria(const TelemetriaActual& t) {
     auto volcarZona = [](JsonObject o, const TelemetriaZona& z) {
         o["humedadPromedio"] = z.humedadPromedio;
         o["temperaturaPromedio"] = z.temperaturaPromedio;
-        o["calidadAire"] = (int)z.calidadAire;
-        o["tendenciaAire"] = (int)z.tendenciaAire;
+        o["calidadAire"] = aTexto(z.calidadAire);
+        o["tendenciaAire"] = aTexto(z.tendenciaAire);
         o["estadoHumidificador"] = z.estadoHumidificador;
-        o["modoControl"] = (int)z.modoActual;
+        o["modoControl"] = aTexto(z.modoActual);
         o["falloCriticoDHT"] = z.falloCriticoDHT;
         o["estadoAireAcondicionado"] = z.estadoAireAcondicionado;
-        o["modoControlAc"] = (int)z.modoAireActual;
+        o["modoControlAc"] = aTexto(z.modoAireActual);
         JsonObject ac = o["estadoDetalladoAC"].to<JsonObject>();
         ac["power"] = z.estadoDetalladoAC.power;
         ac["modoFisico"] = z.estadoDetalladoAC.modoFisico;
@@ -188,10 +188,10 @@ void CloudClient::enviarSensores(const MatrizSensores& m) {
     doc["tipo"] = "sensores";
     JsonObject d = doc["datos"].to<JsonObject>();
     auto volcarDht = [](JsonObject o, const LecturaDHT& l) {
-        o["estado"] = (int)l.estado; o["temperatura"] = l.temperatura; o["humedad"] = l.humedad;
+        o["estado"] = aTexto(l.estado); o["temperatura"] = l.temperatura; o["humedad"] = l.humedad;
     };
     auto volcarMq = [](JsonObject o, const LecturaMQ& l) {
-        o["estado"] = (int)l.estado; o["valorCrudo"] = l.valorCrudo; o["nivel"] = (int)l.nivel;
+        o["estado"] = aTexto(l.estado); o["valorCrudo"] = l.valorCrudo; o["nivel"] = aTexto(l.nivel);
     };
     volcarDht(d["dht1"].to<JsonObject>(), m.dht1); volcarDht(d["dht2"].to<JsonObject>(), m.dht2);
     volcarDht(d["dht3"].to<JsonObject>(), m.dht3); volcarDht(d["dht4"].to<JsonObject>(), m.dht4);

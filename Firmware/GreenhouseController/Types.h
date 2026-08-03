@@ -15,6 +15,41 @@ enum class ModoControlAc : uint8_t { AUTOMATICO, MANUAL };
 enum class NivelCalidadAire : uint8_t { BAJO, MEDIO, ALTO, MUY_ALTO };
 enum class TendenciaAire : uint8_t { SUBIENDO, ESTABLE, BAJANDO };
 
+// Conversión a los strings exactos que espera Shared/types.ts — el JSON hacia el backend/frontend
+// nunca debe llevar el índice numérico crudo del enum (frágil y no coincide con el protocolo).
+inline const char* aTexto(EstadoSensor v) {
+    switch (v) {
+        case EstadoSensor::OK: return "OK";
+        case EstadoSensor::OFFLINE: return "Offline";
+        default: return "Lectura Inválida";
+    }
+}
+inline const char* aTexto(ModoControl v) {
+    switch (v) {
+        case ModoControl::AUTOMATICO: return "AUTO";
+        case ModoControl::TEMPORIZADO: return "TEMPORIZADO";
+        default: return "MANUAL";
+    }
+}
+inline const char* aTexto(ModoControlAc v) {
+    return v == ModoControlAc::AUTOMATICO ? "AUTO" : "MANUAL";
+}
+inline const char* aTexto(NivelCalidadAire v) {
+    switch (v) {
+        case NivelCalidadAire::BAJO: return "Bajo";
+        case NivelCalidadAire::MEDIO: return "Medio";
+        case NivelCalidadAire::ALTO: return "Alto";
+        default: return "Muy Alto";
+    }
+}
+inline const char* aTexto(TendenciaAire v) {
+    switch (v) {
+        case TendenciaAire::SUBIENDO: return "Subiendo";
+        case TendenciaAire::BAJANDO: return "Bajando";
+        default: return "Estable";
+    }
+}
+
 struct LecturaDHT {
     EstadoSensor estado = EstadoSensor::OFFLINE;
     float temperatura = NAN;
