@@ -290,9 +290,10 @@ void tareaWatchdog(void* parametro) {
             MatrizSensores& ms = g_matrizSensores;
 
             Serial.println("--------------------------------------------------------------------");
-            Serial.printf("[ESTADO] WiFi:%s (RSSI %d dBm) | Backend:%s | Heap:%u bytes\n",
+            Serial.printf("[ESTADO] WiFi:%s (RSSI %d dBm) | Backend:%s | Heap:%u bytes | PSRAM:%u bytes (libre:%u)\n",
                           g_wifi.estaConectado() ? "OK" : "SIN CONEXION", g_wifi.obtenerRssi(),
-                          g_cloud.estaConectado() ? "OK" : "SIN CONEXION", heapLibre);
+                          g_cloud.estaConectado() ? "OK" : "SIN CONEXION", heapLibre,
+                          ESP.getPsramSize(), ESP.getFreePsram());
 
             Serial.printf("[ATRILES]  Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s | DHT1=%s(%.1f%%,%.1fC) DHT2=%s(%.1f%%,%.1fC) MQ1=%d\n",
                           at.humedadPromedio, at.temperaturaPromedio, at.estadoHumidificador ? "ON" : "OFF",
