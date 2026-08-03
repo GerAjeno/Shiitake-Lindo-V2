@@ -14,6 +14,11 @@ void setup() {
     Serial.println("\n========================================================");
     Serial.printf("  Shiitake-Lindo V2 — Firmware %s\n", Config::FIRMWARE_VERSION);
     Serial.println("========================================================");
+    Serial.printf("[DIAGNOSTICO] PSRAM detectada: %u bytes | PSRAM libre: %u bytes | Heap libre: %u bytes\n",
+                  ESP.getPsramSize(), ESP.getFreePsram(), ESP.getFreeHeap());
+    if (ESP.getPsramSize() == 0) {
+        Serial.println("[DIAGNOSTICO] *** PSRAM NO DETECTADA *** — revisar Tools > PSRAM en Arduino IDE, o esta placa no tiene PSRAM física.");
+    }
 
     iniciarTareas();
 
