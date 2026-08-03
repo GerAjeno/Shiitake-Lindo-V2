@@ -108,6 +108,11 @@ export function useRealtimeData() {
    * Envía un comando manual y espera la confirmación real del ESP32 (máx. 5s, ver backend).
    * Nunca asume éxito: si no llega ACK a tiempo, el backend igual responde con ejecutado:false.
    */
+  const resolverAlerta = useCallback(async (id: string) => {
+    await apiFetch(`/api/alertas/${id}/resolver`, { method: "PUT" });
+    setAlertas((prev) => prev.map((a) => (a.id === id ? { ...a, resuelta: true } : a)));
+  }, []);
+
   const enviarComando = useCallback((comando: TipoComandoManual): Promise<{ ejecutado: boolean; error?: string }> => {
     return new Promise((resolve) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -126,5 +131,5 @@ export function useRealtimeData() {
     });
   }, []);
 
-  return { actual, sensores, configuracion, alertas, sistemaLogs, conectado, espOnline, ultimaTelemetriaTs, enviarComando };
+  return { actual, sensores, configuracion, alertas, sistemaLogs, conectado, espOnline, ultimaTelemetriaTs, enviarComando, resolverAlerta };
 }

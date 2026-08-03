@@ -6,8 +6,8 @@
  * comandos manuales confirmados por ACK real del ESP32 (nunca se asume éxito optimista).
  */
 
-import React, { useState } from "react";
-import { Droplets, Thermometer, Power, ShieldAlert, Wind, CircleAlert } from "lucide-react";
+import React from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -15,105 +15,16 @@ import { useAuth } from "@/context/AuthContext";
 import { useRealtimeData } from "@/hooks/useRealtimeData";
 import { SystemStatusCard } from "@/components/dashboard/SystemStatusCard";
 import { SensorHealthMatrix } from "@/components/dashboard/SensorHealthMatrix";
-import type { NombreZona, TelemetriaZona } from "@shared/types";
-
-function TarjetaZona({
-  nombreZona, etiqueta, datos, puedeControlar, onToggle,
-}: {
-  nombreZona: NombreZona;
-  etiqueta: string;
-  datos?: TelemetriaZona;
-  puedeControlar: boolean;
-  onToggle: (encender: boolean) => Promise<void>;
-}) {
-  const [enviando, setEnviando] = useState(false);
-  const [ultimoError, setUltimoError] = useState<string | null>(null);
-
-  if (!datos) {
-    return (
-      <div className="glass-panel p-6 animate-pulse h-64 flex items-center justify-center text-slate-500 text-sm font-mono">
-        Esperando telemetría de {etiqueta}...
-      </div>
-    );
-  }
-
-  const manejarToggle = async () => {
-    setEnviando(true);
-    setUltimoError(null);
-    try {
-      await onToggle(!datos.estadoHumidificador);
-    } catch (e) {
-      setUltimoError("Error al enviar el comando.");
-    } finally {
-      setEnviando(false);
-    }
-  };
-
-  return (
-    <div className="glass-panel p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">{etiqueta}</h3>
-        <span className={`text-[10px] font-mono px-2 py-1 rounded-full border ${
-          datos.modoControl === "AUTO" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500" :
-          datos.modoControl === "MANUAL" ? "bg-amber-500/10 border-amber-500/30 text-amber-500" :
-          "bg-cyan-500/10 border-cyan-500/30 text-cyan-500"
-        }`}>{datos.modoControl}</span>
-      </div>
-
-      {datos.falloCriticoDHT && (
-        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-mono">
-          <ShieldAlert className="w-4 h-4 shrink-0" />
-          Fallo crítico de sensores — humidificador en apagado de seguridad.
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex items-center gap-3">
-          <Droplets className="w-8 h-8 text-cyan-500" />
-          <div>
-            <p className="text-2xl font-bold font-mono">{datos.humedadPromedio !== null ? `${datos.humedadPromedio.toFixed(1)}%` : "—"}</p>
-            <p className="text-[10px] text-slate-500 uppercase font-mono">Humedad</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Thermometer className="w-8 h-8 text-amber-500" />
-          <div>
-            <p className="text-2xl font-bold font-mono">{datos.temperaturaPromedio !== null ? `${datos.temperaturaPromedio.toFixed(1)}°C` : "—"}</p>
-            <p className="text-[10px] text-slate-500 uppercase font-mono">Temperatura</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-        <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
-          <Wind className="w-4 h-4" /> Calidad aire: {datos.calidadAire}
-        </div>
-        <button
-          onClick={manejarToggle}
-          disabled={!puedeControlar || enviando || datos.modoControl !== "MANUAL"}
-          title={datos.modoControl !== "MANUAL" ? "Cambia a modo MANUAL en Configuración para controlar directamente" : ""}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all disabled:opacity-40 ${
-            datos.estadoHumidificador
-              ? "bg-emerald-600 text-white hover:bg-emerald-500"
-              : "bg-slate-700 text-slate-200 hover:bg-slate-600"
-          }`}
-        >
-          <Power className="w-3.5 h-3.5" />
-          {enviando ? "Enviando..." : datos.estadoHumidificador ? "Encendido" : "Apagado"}
-        </button>
-      </div>
-      {ultimoError && (
-        <div className="flex items-center gap-2 text-rose-400 text-[11px] font-mono">
-          <CircleAlert className="w-3.5 h-3.5" /> {ultimoError}
-        </div>
-      )}
-    </div>
-  );
-}
+import { AlertsBanner } from "@/components/dashboard/AlertsBanner";
+import { ZoneCard } from "@/components/dashboard/ZoneCard";
+import type { NombreZona } from "@shared/types";
 
 export default function DashboardPage() {
   const { rol } = useAuth();
-  const { actual, sensores, conectado, espOnline, ultimaTelemetriaTs, enviarComando } = useRealtimeData();
+  const {
+    actual, sensores, configuracion, alertas, conectado, espOnline,
+    ultimaTelemetriaTs, enviarComando, resolverAlerta,
+  } = useRealtimeData();
   const puedeControlar = rol === "admin" || rol === "operador";
 
   const manejarToggleZona = (zona: NombreZona) => async (encender: boolean) => {
@@ -121,25 +32,78 @@ export default function DashboardPage() {
     if (!resultado.ejecutado) throw new Error(resultado.error ?? "El dispositivo no confirmó la orden.");
   };
 
+  const co2Deshabilitados =
+    configuracion?.sensoresHabilitados && configuracion.sensoresHabilitados.mq1 === false && configuracion.sensoresHabilitados.mq2 === false;
+
   return (
     <div className="min-h-screen flex bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Header conectadoRTDB={conectado} espOnline={espOnline} />
         <main className="flex-1 p-4 pb-24 md:p-8 md:pb-8 overflow-y-auto space-y-6">
+          <AlertsBanner alertas={alertas} onResolver={resolverAlerta} />
+
+          {!espOnline && ultimaTelemetriaTs && (
+            <div className="bg-rose-950/90 border-2 border-rose-500/80 p-4 rounded-xl flex items-center gap-3 text-rose-200 font-mono text-xs shadow-xl">
+              <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0 animate-bounce" />
+              <div className="space-y-0.5">
+                <div className="font-bold text-sm text-rose-300 uppercase tracking-wide">
+                  ⚠️ Alerta de conectividad: microcontrolador desconectado / sin señal
+                </div>
+                <div>
+                  El microcontrolador dejó de enviar telemetría en tiempo real (última lectura registrada:{" "}
+                  <strong className="text-white bg-rose-900/80 px-1.5 py-0.5 rounded border border-rose-700">
+                    {new Date(ultimaTelemetriaTs).toLocaleTimeString("es-CL", { timeZone: "America/Santiago" })}
+                  </strong>
+                  ). Verifique la alimentación eléctrica y la señal WiFi del módulo en el invernadero.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {co2Deshabilitados && (
+            <div className="bg-amber-950/80 border border-amber-500/80 p-4 rounded-xl flex items-center gap-3 text-amber-200 font-mono text-xs shadow-lg">
+              <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0 animate-pulse" />
+              <span>
+                Precaución: los sensores de CO2 (MQ-135 #1 y #2) se encuentran desactivados en configuración. El monitoreo de calidad del
+                aire está suspendido.
+              </span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TarjetaZona
-              nombreZona="atriles" etiqueta="Atriles (Fructificación)" datos={actual?.atriles}
-              puedeControlar={puedeControlar} onToggle={manejarToggleZona("atriles")}
+            <ZoneCard
+              nombreZona="Área 1: Atriles"
+              subtitulo="Cultivo Principal y Crecimiento de Hongos Shiitake"
+              telemetria={actual?.atriles}
+              configuracion={configuracion?.atriles}
+              sensoresNombres={["DHT #1", "DHT #2", "MQ-135 #1"]}
+              co2Deshabilitado={configuracion?.sensoresHabilitados?.mq1 === false}
+              colorTema="cyan"
+              puedeControlar={puedeControlar}
+              onToggleHumidificador={manejarToggleZona("atriles")}
             />
-            <TarjetaZona
-              nombreZona="descanso" etiqueta="Descanso (Micelio)" datos={actual?.descanso}
-              puedeControlar={puedeControlar} onToggle={manejarToggleZona("descanso")}
+            <ZoneCard
+              nombreZona="Área 2: Descanso"
+              subtitulo="Zona de Reposo, Incubación y Mantenimiento"
+              telemetria={actual?.descanso}
+              configuracion={configuracion?.descanso}
+              sensoresNombres={["DHT #3", "DHT #4", "MQ-135 #2"]}
+              co2Deshabilitado={configuracion?.sensoresHabilitados?.mq2 === false}
+              colorTema="emerald"
+              puedeControlar={puedeControlar}
+              onToggleHumidificador={manejarToggleZona("descanso")}
             />
           </div>
 
           <SystemStatusCard actual={actual} espOnline={espOnline} ultimaTelemetriaTs={ultimaTelemetriaTs} />
           <SensorHealthMatrix sensores={sensores} />
+
+          <div className="flex items-center justify-between text-xs text-slate-500 font-mono pt-4">
+            <span className="flex items-center gap-1.5">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Actualización bidireccional continua
+            </span>
+          </div>
         </main>
         <Footer />
       </div>
