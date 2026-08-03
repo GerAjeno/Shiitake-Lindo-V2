@@ -42,13 +42,19 @@ async function main() {
   for (const zona of ['atriles', 'descanso']) {
     const z = config[zona] || {};
     const rangos = z.rangosHorarios ? Object.values(z.rangosHorarios) : [];
-    await pg.query(
-      `UPDATE configuracion_zona SET
+    // INSERT ... ON CONFLICT (no UPDATE a secas): si la fila de la zona aún no existe
+    // (ej. la migración 0002 todavía no corrió), un UPDATE plano matchea 0 filas y
+    // reporta "éxito" sin escribir nada — ya nos pasó una vez.
+    const { rowCount } = await pg.query(
+      `INSERT INTO configuracion_zona (zona, humedad_minima, humedad_maxima, modo, humidificador_manual,
+                                        temporizador_encendido, rangos_horarios, ac_modo, ac_temp_minima,
+                                        ac_temp_maxima, ac_manual_encendido, actualizado_en)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
+       ON CONFLICT (zona) DO UPDATE SET
          humedad_minima = $2, humedad_maxima = $3, modo = $4, humidificador_manual = $5,
          temporizador_encendido = $6, rangos_horarios = $7,
          ac_modo = $8, ac_temp_minima = $9, ac_temp_maxima = $10, ac_manual_encendido = $11,
-         actualizado_en = now()
-       WHERE zona = $1`,
+         actualizado_en = now()`,
       [
         zona,
         z.humedadMinima ?? 75, z.humedadMaxima ?? 85, (z.modo || 'AUTO').toString().toUpperCase(),
@@ -58,6 +64,7 @@ async function main() {
         !!z.aireAcondicionado?.manualEncendido,
       ]
     );
+    console.log(`  zona ${zona}: ${rowCount} fila escrita (humedad ${z.humedadMinima ?? 75}-${z.humedadMaxima ?? 85}%, modo ${(z.modo || 'AUTO').toUpperCase()})`);
   }
   console.log('  OK: configuración de ambas zonas migrada.');
 

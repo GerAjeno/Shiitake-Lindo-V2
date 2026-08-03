@@ -25,7 +25,7 @@ function filaAZona(fila: any): ConfiguracionZona {
   };
 }
 
-async function obtenerConfiguracionCompleta(): Promise<ConfiguracionSistema> {
+export async function obtenerConfiguracionCompleta(): Promise<ConfiguracionSistema> {
   const { rows: zonas } = await pool.query('SELECT * FROM configuracion_zona');
   const { rows: sistema } = await pool.query('SELECT * FROM configuracion_sistema WHERE id = true');
   const atriles = zonas.find((z) => z.zona === 'atriles');

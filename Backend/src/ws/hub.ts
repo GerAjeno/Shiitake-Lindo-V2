@@ -12,6 +12,7 @@ import { v4 as uuid } from 'uuid';
 import { pool } from '../db/pool';
 import { autenticarWebSocketNavegador, UsuarioAutenticado } from '../auth/middleware';
 import { autenticarDispositivo } from '../auth/device';
+import { obtenerConfiguracionCompleta } from '../routes/config';
 import type {
   MensajeClienteAServidor,
   MensajeServidorACliente,
@@ -195,6 +196,16 @@ export function iniciarWebSocketHub(server: http.Server) {
       }
       console.log(`[WS] Dispositivo conectado: ${dispositivoId}`);
       dispositivoActivo = { id: dispositivoId, ws };
+
+      // El servidor SIEMPRE gana (decisión explícita del usuario, sin comparar versiones):
+      // un dispositivo recién conectado/reiniciado debe recibir la config real de inmediato,
+      // no quedarse con su NVS local hasta que alguien guarde algo desde la web.
+      try {
+        const configuracionActual = await obtenerConfiguracionCompleta();
+        ws.send(JSON.stringify({ tipo: 'configuracion', datos: configuracionActual }));
+      } catch (err) {
+        console.error('[WS] No se pudo enviar configuración inicial al dispositivo:', err);
+      }
       difundirANavegadores({ tipo: 'telemetria', datos: { espOnline: true } as never });
 
       ws.on('message', (data) => manejarMensajeDispositivo(dispositivoId, data.toString()));
