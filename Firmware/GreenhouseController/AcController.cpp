@@ -6,8 +6,12 @@ AcController::AcController(const char* ipAtriles, uint64_t idAtriles, const char
       _acDescanso(ipDescanso, idDescanso, tokenDescanso, keyDescanso) {}
 
 void AcController::inicializar() {
-    _acAtriles.begin();
-    _acDescanso.begin();
+    // Deliberadamente NO se conecta aquí: inicializar() se llama de forma síncrona en setup(),
+    // antes de que la tarea de red haya inicializado WiFi/LWIP. Intentar un WiFiClient::connect()
+    // en ese punto provoca "assert failed: xQueueSemaphoreTake" (cola/semáforo de LWIP aún no
+    // existe). La conexión a cada AC es perezosa: MideaLANClient::enviarComandoCifrado() ya
+    // llama a conectarYAutenticar() automáticamente en el primer uso real, cuando WiFi ya está
+    // arriba (actualizarControl() se invoca desde tareaControl, después de que tareaRed conecta).
 }
 
 void AcController::evaluarZona(MideaLANClient& ac, ConfiguracionZona& config, bool& estadoActual,
