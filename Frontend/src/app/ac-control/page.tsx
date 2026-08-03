@@ -46,7 +46,7 @@ function TarjetaAC({ etiqueta, datos }: { etiqueta: string; datos?: TelemetriaZo
         <div className="flex items-center gap-2">
           <Thermometer className="w-6 h-6 text-amber-500" />
           <div>
-            <p className="text-lg font-bold font-mono">{Number.isNaN(ac.temperaturaInterior) ? "—" : `${ac.temperaturaInterior.toFixed(1)}°C`}</p>
+            <p className="text-lg font-bold font-mono">{ac.temperaturaInterior !== null ? `${ac.temperaturaInterior.toFixed(1)}°C` : "—"}</p>
             <p className="text-[10px] text-slate-500 uppercase font-mono">Temp. interior</p>
           </div>
         </div>

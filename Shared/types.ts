@@ -55,7 +55,7 @@ export interface EstadoDetalladoAC {
   modoFisico: 'Auto' | 'Cool' | 'Heat' | 'Dry' | 'Fan';
   velocidadVentilador: 'Auto' | 'High' | 'Medium' | 'Low';
   temperaturaObjetivo: number;
-  temperaturaInterior: number;
+  temperaturaInterior: number | null;
   comunicacionOk: boolean;
 }
 
