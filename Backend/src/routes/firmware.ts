@@ -27,7 +27,9 @@ firmwareRouter.get('/', requireAuth, requireRole('admin'), async (_req, res) => 
 firmwareRouter.get('/:version/download', (req, res) => {
   const archivo = path.join(FIRMWARE_DIR, `${req.params.version}.bin`);
   if (!fs.existsSync(archivo)) return res.status(404).json({ error: 'Versión no encontrada.' });
+  const { size } = fs.statSync(archivo);
   res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Length', size); // sin esto, Node usa chunked transfer y el ESP32 no sabe el tamaño (http.getSize() = -1)
   res.setHeader('Cache-Control', 'no-cache');
   fs.createReadStream(archivo).pipe(res);
 });
