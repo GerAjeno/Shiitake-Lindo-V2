@@ -13,6 +13,8 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtimeData } from "@/hooks/useRealtimeData";
+import { SystemStatusCard } from "@/components/dashboard/SystemStatusCard";
+import { SensorHealthMatrix } from "@/components/dashboard/SensorHealthMatrix";
 import type { NombreZona, TelemetriaZona } from "@shared/types";
 
 function TarjetaZona({
@@ -111,7 +113,7 @@ function TarjetaZona({
 
 export default function DashboardPage() {
   const { rol } = useAuth();
-  const { actual, conectado, espOnline, enviarComando } = useRealtimeData();
+  const { actual, sensores, conectado, espOnline, ultimaTelemetriaTs, enviarComando } = useRealtimeData();
   const puedeControlar = rol === "admin" || rol === "operador";
 
   const manejarToggleZona = (zona: NombreZona) => async (encender: boolean) => {
@@ -135,6 +137,9 @@ export default function DashboardPage() {
               puedeControlar={puedeControlar} onToggle={manejarToggleZona("descanso")}
             />
           </div>
+
+          <SystemStatusCard actual={actual} espOnline={espOnline} ultimaTelemetriaTs={ultimaTelemetriaTs} />
+          <SensorHealthMatrix sensores={sensores} />
         </main>
         <Footer />
       </div>

@@ -126,5 +126,5 @@ export function useRealtimeData() {
     });
   }, []);
 
-  return { actual, sensores, configuracion, alertas, sistemaLogs, conectado, espOnline, enviarComando };
+  return { actual, sensores, configuracion, alertas, sistemaLogs, conectado, espOnline, ultimaTelemetriaTs, enviarComando };
 }
