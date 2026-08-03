@@ -16,6 +16,7 @@ private:
     const char* _ssid;
     const char* _password;
     uint32_t _ultimoIntentoMillis = 0;
+    bool _estabaConectado = false;
     static constexpr uint32_t INTERVALO_RECONEXION_MS = 15000;
 };
 

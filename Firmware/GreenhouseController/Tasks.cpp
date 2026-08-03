@@ -23,6 +23,22 @@ WiFiManagerHelper g_wifi(Config::WIFI_SSID_DEFAULT, Config::WIFI_PASSWORD_DEFAUL
 
 static NivelCalidadAire mqANivel(const LecturaMQ& mq) { return mq.nivel; }
 
+static const char* estadoATexto(EstadoSensor e) {
+    switch (e) {
+        case EstadoSensor::OK: return "OK";
+        case EstadoSensor::OFFLINE: return "OFFLINE";
+        default: return "INVALIDO";
+    }
+}
+
+static const char* modoATexto(ModoControl m) {
+    switch (m) {
+        case ModoControl::MANUAL: return "MANUAL";
+        case ModoControl::TEMPORIZADO: return "TEMPORIZADO";
+        default: return "AUTO";
+    }
+}
+
 static String timestampIso() {
     time_t ahora = time(nullptr);
     struct tm ti;
@@ -264,6 +280,35 @@ void tareaWatchdog(void* parametro) {
         uint32_t heapLibre = ESP.getFreeHeap();
         if (heapLibre < 20000) {
             Serial.printf("[WATCHDOG] Memoria crítica: %u bytes libres.\n", heapLibre);
+        }
+
+        // Heartbeat de estado completo cada ~10s, para tener visibilidad en el monitor serie
+        // sin esperar a que ocurra un cambio de relé o de conexión.
+        if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) == pdTRUE) {
+            TelemetriaZona& at = g_telemetria.atriles;
+            TelemetriaZona& de = g_telemetria.descanso;
+            MatrizSensores& ms = g_matrizSensores;
+
+            Serial.println("--------------------------------------------------------------------");
+            Serial.printf("[ESTADO] WiFi:%s (RSSI %d dBm) | Backend:%s | Heap:%u bytes\n",
+                          g_wifi.estaConectado() ? "OK" : "SIN CONEXION", g_wifi.obtenerRssi(),
+                          g_cloud.estaConectado() ? "OK" : "SIN CONEXION", heapLibre);
+
+            Serial.printf("[ATRILES]  Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s | DHT1=%s(%.1f%%,%.1fC) DHT2=%s(%.1f%%,%.1fC) MQ1=%d\n",
+                          at.humedadPromedio, at.temperaturaPromedio, at.estadoHumidificador ? "ON" : "OFF",
+                          modoATexto(at.modoActual), at.falloCriticoDHT ? "SI" : "no",
+                          estadoATexto(ms.dht1.estado), ms.dht1.humedad, ms.dht1.temperatura,
+                          estadoATexto(ms.dht2.estado), ms.dht2.humedad, ms.dht2.temperatura,
+                          ms.mq1.valorCrudo);
+
+            Serial.printf("[DESCANSO] Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s | DHT3=%s(%.1f%%,%.1fC) DHT4=%s(%.1f%%,%.1fC) MQ2=%d\n",
+                          de.humedadPromedio, de.temperaturaPromedio, de.estadoHumidificador ? "ON" : "OFF",
+                          modoATexto(de.modoActual), de.falloCriticoDHT ? "SI" : "no",
+                          estadoATexto(ms.dht3.estado), ms.dht3.humedad, ms.dht3.temperatura,
+                          estadoATexto(ms.dht4.estado), ms.dht4.humedad, ms.dht4.temperatura,
+                          ms.mq2.valorCrudo);
+            Serial.println("--------------------------------------------------------------------");
+            xSemaphoreGive(g_mutexEstado);
         }
 
         // Criterios de salud para confirmar el firmware tras una actualización OTA:

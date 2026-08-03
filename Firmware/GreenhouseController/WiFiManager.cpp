@@ -13,7 +13,16 @@ void WiFiManagerHelper::inicializar() {
 }
 
 void WiFiManagerHelper::procesarConexion() {
-    if (WiFi.status() == WL_CONNECTED) return;
+    bool conectadoAhora = (WiFi.status() == WL_CONNECTED);
+    if (conectadoAhora && !_estabaConectado) {
+        Serial.printf("[WIFI] Conectado a '%s' | IP: %s | RSSI: %d dBm\n",
+                      WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    } else if (!conectadoAhora && _estabaConectado) {
+        Serial.println("[WIFI] Conexión perdida, reintentando...");
+    }
+    _estabaConectado = conectadoAhora;
+
+    if (conectadoAhora) return;
 
     uint32_t ahora = millis();
     if (ahora - _ultimoIntentoMillis >= INTERVALO_RECONEXION_MS || _ultimoIntentoMillis == 0) {
