@@ -71,14 +71,14 @@ function TarjetaZona({
         <div className="flex items-center gap-3">
           <Droplets className="w-8 h-8 text-cyan-500" />
           <div>
-            <p className="text-2xl font-bold font-mono">{datos.humedadPromedio.toFixed(1)}%</p>
+            <p className="text-2xl font-bold font-mono">{datos.humedadPromedio !== null ? `${datos.humedadPromedio.toFixed(1)}%` : "—"}</p>
             <p className="text-[10px] text-slate-500 uppercase font-mono">Humedad</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <Thermometer className="w-8 h-8 text-amber-500" />
           <div>
-            <p className="text-2xl font-bold font-mono">{datos.temperaturaPromedio.toFixed(1)}°C</p>
+            <p className="text-2xl font-bold font-mono">{datos.temperaturaPromedio !== null ? `${datos.temperaturaPromedio.toFixed(1)}°C` : "—"}</p>
             <p className="text-[10px] text-slate-500 uppercase font-mono">Temperatura</p>
           </div>
         </div>

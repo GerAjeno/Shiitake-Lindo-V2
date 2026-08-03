@@ -89,8 +89,8 @@ export interface ConfiguracionSistema {
 }
 
 export interface TelemetriaZona {
-  humedadPromedio: number;
-  temperaturaPromedio: number;
+  humedadPromedio: number | null;
+  temperaturaPromedio: number | null;
   calidadAire: NivelCalidadAire;
   tendenciaAire: TendenciaAire;
   estadoHumidificador: boolean;
