@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { Save, Check, RefreshCw, Power, Clock, Droplets, Sliders as SlidersIcon, ShieldAlert } from "lucide-react";
+import { Save, Check, RefreshCw, Clock, Droplets, Sliders as SlidersIcon, ShieldAlert, CircleAlert } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -74,8 +74,49 @@ function PillModo({ activo, colorActivo, onClick, disabled, children }: { activo
   );
 }
 
-function TarjetaZona({ v, local, soloLectura, onCambiar }: { v: VisualZona; local: ConfiguracionZona; soloLectura: boolean; onCambiar: (cambios: Partial<ConfiguracionZona>) => void }) {
+/** Switch clásico (track + perilla deslizante) — usado para el override manual, que aplica al
+ * toque en vez de esperar al botón "Guardar" general de la página. */
+function InterruptorSwitch({ activo, disabled, cargando, onClick }: { activo: boolean; disabled: boolean; cargando: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={activo}
+      disabled={disabled || cargando}
+      onClick={onClick}
+      className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${
+        activo ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-700"
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+          activo ? "translate-x-8" : "translate-x-1"
+        } ${cargando ? "animate-pulse" : ""}`}
+      />
+    </button>
+  );
+}
+
+function TarjetaZona({ v, local, soloLectura, onCambiar, onOverrideInmediato }: {
+  v: VisualZona; local: ConfiguracionZona; soloLectura: boolean;
+  onCambiar: (cambios: Partial<ConfiguracionZona>) => void;
+  onOverrideInmediato: (nuevoValor: boolean) => Promise<void>;
+}) {
   const margen = local.humedadMaxima - local.humedadMinima;
+  const [aplicandoOverride, setAplicandoOverride] = useState(false);
+  const [errorOverride, setErrorOverride] = useState<string | null>(null);
+
+  const manejarOverride = async () => {
+    setErrorOverride(null);
+    setAplicandoOverride(true);
+    try {
+      await onOverrideInmediato(!local.humidificadorManual);
+    } catch (err: any) {
+      setErrorOverride(err?.message ?? "No se pudo aplicar el cambio.");
+    } finally {
+      setAplicandoOverride(false);
+    }
+  };
 
   return (
     <div className={`p-6 glass-panel min-w-0 overflow-hidden ${v.colorBorde} bg-gradient-to-br ${v.colorGradiente} space-y-6 rounded-2xl`}>
@@ -128,21 +169,21 @@ function TarjetaZona({ v, local, soloLectura, onCambiar }: { v: VisualZona; loca
       )}
 
       {local.modo === "MANUAL" && (
-        <div className="p-4 rounded-xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/30 flex items-center justify-between shadow-sm">
-          <span className="text-xs font-mono text-amber-800 dark:text-amber-200 font-bold">{v.releLabel} Override:</span>
-          <button
-            type="button"
-            disabled={soloLectura}
-            onClick={() => onCambiar({ humidificadorManual: !local.humidificadorManual })}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold font-mono text-xs transition-all disabled:cursor-not-allowed ${
-              local.humidificadorManual
-                ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-950/50 animate-pulse"
-                : "bg-rose-500/10 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40 hover:bg-rose-500/20 dark:hover:bg-rose-500/30"
-            }`}
-          >
-            <Power className="w-3.5 h-3.5" />
-            <span>{local.humidificadorManual ? `${v.releLabel.toUpperCase()} ON` : `ACTIVAR ${v.releLabel.toUpperCase()}`}</span>
-          </button>
+        <div className="p-4 rounded-xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/30 shadow-sm space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-mono text-amber-800 dark:text-amber-200 font-bold block">{v.releLabel} Override</span>
+              <span className={`text-[11px] font-mono ${local.humidificadorManual ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400"}`}>
+                {aplicandoOverride ? "Aplicando..." : local.humidificadorManual ? "ENCENDIDO" : "APAGADO"}
+              </span>
+            </div>
+            <InterruptorSwitch activo={local.humidificadorManual} disabled={soloLectura} cargando={aplicandoOverride} onClick={manejarOverride} />
+          </div>
+          {errorOverride && (
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-rose-600 dark:text-rose-400">
+              <CircleAlert className="w-3.5 h-3.5 shrink-0" /> {errorOverride}
+            </div>
+          )}
         </div>
       )}
 
@@ -231,6 +272,22 @@ export default function SettingsPage() {
     }
   };
 
+  /**
+   * A diferencia del resto de los campos (que esperan al botón "Guardar" general), el override
+   * manual aplica al toque — igual que en el sistema anterior. Manda un PUT parcial e inmediato
+   * con { modo: 'MANUAL', humidificadorManual }, sin depender de si hay otros cambios sin guardar
+   * en la tarjeta (sliders, horarios) para no aplicarlos de rebote.
+   */
+  const overrideInmediato = async (zona: "atriles" | "descanso", nuevoValor: boolean) => {
+    // El endpoint devuelve la ConfiguracionSistema completa (ambas zonas), no solo la editada.
+    const completa = await apiFetch<{ atriles: ConfiguracionZona; descanso: ConfiguracionZona }>(`/api/config/${zona}`, {
+      method: "PUT",
+      body: JSON.stringify({ modo: "MANUAL", humidificadorManual: nuevoValor }),
+    });
+    setLocalAtriles(completa.atriles);
+    setLocalDescanso(completa.descanso);
+  };
+
   const descartarEdicion = () => {
     setErrorValidacion(null);
     if (configuracion) {
@@ -273,8 +330,8 @@ export default function SettingsPage() {
           ) : (
             <div className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <TarjetaZona v={VISUAL_ATRILES} local={localAtriles} soloLectura={soloLectura} onCambiar={(c) => setLocalAtriles({ ...localAtriles, ...c })} />
-                <TarjetaZona v={VISUAL_DESCANSO} local={localDescanso} soloLectura={soloLectura} onCambiar={(c) => setLocalDescanso({ ...localDescanso, ...c })} />
+                <TarjetaZona v={VISUAL_ATRILES} local={localAtriles} soloLectura={soloLectura} onCambiar={(c) => setLocalAtriles({ ...localAtriles, ...c })} onOverrideInmediato={(v) => overrideInmediato("atriles", v)} />
+                <TarjetaZona v={VISUAL_DESCANSO} local={localDescanso} soloLectura={soloLectura} onCambiar={(c) => setLocalDescanso({ ...localDescanso, ...c })} onOverrideInmediato={(v) => overrideInmediato("descanso", v)} />
               </div>
 
               {!soloLectura && (

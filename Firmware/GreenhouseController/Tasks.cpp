@@ -214,15 +214,9 @@ void tareaControl(void* parametro) {
 
             // Aplicar comando manual pendiente recibido por WS.
             ComandoEntrante cmd = g_cloud.tomarComandoPendiente();
-            if (cmd.pendiente) {
-                Serial.printf("[COMANDO] Recibido: tipo=%s zona=%s encender=%s orderId=%s\n",
-                    cmd.tipo.c_str(), cmd.zona.c_str(), cmd.valorBool ? "true" : "false", cmd.orderId.c_str());
-            }
             if (cmd.pendiente && cmd.tipo == "humidificador") {
                 uint8_t canal = cmd.zona == "atriles" ? Config::RELE_CANAL_ATRILES : Config::RELE_CANAL_DESCANSO;
                 bool exito = g_releClient.escribirCanal(canal, cmd.valorBool);
-                Serial.printf("[COMANDO] escribirCanal(canal=%u, encender=%s) -> %s\n",
-                    canal, cmd.valorBool ? "true" : "false", exito ? "EXITO" : "FALLO");
                 g_cloud.enviarAck(cmd.orderId, exito, exito ? "" : "El módulo de relés no confirmó la orden.");
             } else if (cmd.pendiente) {
                 g_cloud.enviarAck(cmd.orderId, false, "Tipo de comando no reconocido en esta versión.");
