@@ -30,27 +30,19 @@ graph TD
         DHT[DHT22 x4 — Atriles y Descanso]
         MQ[MQ135 x2 — Calidad de aire]
         RELE[Módulo de relés Modbus RTU/UART]
-        AC[A/C Midea/Khöne — LAN local]
     end
 
-    subgraph Identidad
-        FB[Firebase Authentication<br/>solo login]
-    end
-
-    FE <-->|HTTPS + WSS| CD
+    FE <-->|HTTPS + WSS, cookie httpOnly| CD
     CD --> BE
     BE <--> PG
     BE <-->|WSS, token propio| CTRL
-    FE -.->|ID token| FB
-    BE -.->|verifica ID token| FB
     CTRL <--> DHT
     CTRL <--> MQ
     CTRL --> RELE
-    CTRL <-->|LAN local, AES| AC
 ```
 
-- **Auth**: Firebase Authentication (proyecto `invernadero-shiitake-iot`) **solo para login** — mismos correos/contraseñas de siempre. El backend verifica el ID token y resuelve el rol (`admin` / `operador` / `lectura`) contra Postgres. Sin Firebase Realtime Database.
-- **Tiempo real**: un único WebSocket (`/ws`) — canal navegador (Firebase ID token) y canal dispositivo (token propio del ESP32, nunca Firebase).
+- **Auth**: 100% local, sin ningún proveedor externo — contraseñas con bcrypt, sesión firmada con JWT propio en una cookie httpOnly (`Backend/src/auth/local.ts`). El backend resuelve el rol (`admin` / `operador` / `lectura`) contra Postgres en cada request. Solo un admin puede crear usuarios nuevos.
+- **Tiempo real**: un único WebSocket (`/ws`) — canal navegador (misma cookie de sesión) y canal dispositivo (token propio del ESP32, independiente).
 - **Comandos manuales**: confirmados por ACK real del dispositivo en máx. 5s — nunca se asume éxito sin confirmación.
 - **Firmware**: control 100% local y autónomo si se pierde Internet; solo el servidor gana al reconectar (sin comparar versiones). Redundancia dual de sensores por zona.
 - **OTA**: firmada (SHA-256 + Ed25519) — el ESP32 rechaza cualquier binario no firmado por el servidor.
@@ -79,7 +71,7 @@ cd Frontend && npm install && npm run dev   # http://localhost:3000
 
 ## Despliegue en el servidor
 
-Ver `docs/RUNBOOK_INFRA.md` para la guía completa (VM, Docker, Cloudflare Tunnel, Firebase, claves OTA). Resumen:
+Ver `docs/RUNBOOK_INFRA.md` para la guía completa (VM, Docker, Cloudflare Tunnel, claves OTA). Resumen:
 
 ```bash
 git clone https://github.com/GerAjeno/Shiitake-Lindo-V2.git && cd Shiitake-Lindo-V2

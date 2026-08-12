@@ -108,32 +108,6 @@ function EditorZona({ nombreZona, etiqueta, config, soloLectura, onGuardado }: {
         </div>
       )}
 
-      <div className="border-t border-slate-200 dark:border-slate-800 pt-4 space-y-3">
-        <p className="text-xs font-mono text-slate-500 uppercase">Aire acondicionado</p>
-        <label className="block text-xs font-mono text-slate-500">Modo AC
-          <select disabled={soloLectura} value={local.aireAcondicionado.modo}
-            onChange={(e) => setLocal({ ...local, aireAcondicionado: { ...local.aireAcondicionado, modo: e.target.value as any } })}
-            className="mt-1 w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm disabled:opacity-50">
-            <option value="AUTO">AUTO</option>
-            <option value="MANUAL">MANUAL (solo lectura, se controla con su propio remoto)</option>
-          </select>
-        </label>
-        {local.aireAcondicionado.modo === "AUTO" && (
-          <div className="grid grid-cols-2 gap-4">
-            <label className="text-xs font-mono text-slate-500">Temp. mínima °C
-              <input type="number" disabled={soloLectura} value={local.aireAcondicionado.temperaturaMinima}
-                onChange={(e) => setLocal({ ...local, aireAcondicionado: { ...local.aireAcondicionado, temperaturaMinima: Number(e.target.value) } })}
-                className="mt-1 w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm disabled:opacity-50" />
-            </label>
-            <label className="text-xs font-mono text-slate-500">Temp. máxima °C
-              <input type="number" disabled={soloLectura} value={local.aireAcondicionado.temperaturaMaxima}
-                onChange={(e) => setLocal({ ...local, aireAcondicionado: { ...local.aireAcondicionado, temperaturaMaxima: Number(e.target.value) } })}
-                className="mt-1 w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm disabled:opacity-50" />
-            </label>
-          </div>
-        )}
-      </div>
-
       {!soloLectura && (
         <div className="flex justify-end">
           <button onClick={guardar} disabled={guardando}

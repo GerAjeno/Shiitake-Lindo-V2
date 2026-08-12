@@ -1,16 +1,18 @@
 /**
  * @file hub.ts
  * @description Hub de WebSocket único (/ws) con dos tipos de cliente:
- *  - "navegador": el dashboard, autenticado con un ID token de Firebase.
- *  - "dispositivo": el ESP32-S3, autenticado con un token propio (no Firebase).
+ *  - "navegador": el dashboard, autenticado con la cookie de sesión propia (ver auth/local.ts).
+ *  - "dispositivo": el ESP32-S3, autenticado con un token propio (no depende del navegador).
  * El backend hace de relay (navegador <-> dispositivo) y persiste todo en Postgres.
  */
 import http from 'http';
 import { URL } from 'url';
+import cookie from 'cookie';
 import { WebSocket, WebSocketServer } from 'ws';
 import { v4 as uuid } from 'uuid';
 import { pool } from '../db/pool';
 import { autenticarWebSocketNavegador, UsuarioAutenticado } from '../auth/middleware';
+import { NOMBRE_COOKIE_SESION } from '../auth/local';
 import { autenticarDispositivo } from '../auth/device';
 import { obtenerConfiguracionCompleta } from '../routes/config';
 import type {
@@ -135,17 +137,9 @@ async function manejarMensajeDispositivo(dispositivoId: string, raw: string) {
         const ultima = lote.muestras[lote.muestras.length - 1];
         if (ultima) {
           await pool.query(
-            `INSERT INTO historial (zona, humedad, temperatura, rele_encendido, ac_temp_interior, ac_encendido, ts)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [
-              lote.zona,
-              ultima.humedad,
-              ultima.temperatura,
-              ultima.releEncendido,
-              lote.acTemperaturaInterior ?? null,
-              lote.acEncendido ?? null,
-              ultima.ts,
-            ]
+            `INSERT INTO historial (zona, humedad, temperatura, rele_encendido, ts)
+             VALUES ($1,$2,$3,$4,$5)`,
+            [lote.zona, ultima.humedad, ultima.temperatura, ultima.releEncendido, ultima.ts]
           );
         }
       }
@@ -218,7 +212,8 @@ export function iniciarWebSocketHub(server: http.Server) {
     }
 
     if (tipo === 'navegador') {
-      const token = url.searchParams.get('token') ?? '';
+      const cookies = cookie.parse(req.headers.cookie ?? '');
+      const token = cookies[NOMBRE_COOKIE_SESION] ?? '';
       try {
         const usuario = await autenticarWebSocketNavegador(token);
         const cliente: ClienteNavegador = { ws, usuario };

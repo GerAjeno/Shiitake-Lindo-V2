@@ -13,10 +13,6 @@ bool g_loteHistorialListo = false;
 SensorManager g_sensores;
 RelayModbusClient g_releClient(Config::PIN_RELE_TX, Config::PIN_RELE_RX, Config::RELE_UART_BAUDIOS, Config::RELE_DIRECCION_MODBUS);
 HumidifierController g_humidificador(&g_releClient);
-AcController g_acController(
-    "0.0.0.0", 0, Config::AC_ATRILES_TOKEN, Config::AC_ATRILES_KEY,
-    "0.0.0.0", 0, Config::AC_DESCANSO_TOKEN, Config::AC_DESCANSO_KEY
-); // IPs/DeviceId reales se completan en Config.h antes de compilar (ver AC_* en ese archivo)
 ConfigCache g_configCache;
 CloudClient g_cloud(&g_configCache, &g_config);
 WiFiManagerHelper g_wifi(Config::WIFI_SSID_DEFAULT, Config::WIFI_PASSWORD_DEFAULT);
@@ -51,11 +47,14 @@ static String timestampIso() {
 void iniciarTareas() {
     g_mutexEstado = xSemaphoreCreateMutex();
 
+    pinMode(Config::PIN_LED_ATRILES, OUTPUT);
+    pinMode(Config::PIN_LED_DESCANSO, OUTPUT);
+    digitalWrite(Config::PIN_LED_ATRILES, LOW);
+    digitalWrite(Config::PIN_LED_DESCANSO, LOW);
+
     g_sensores.inicializar();
     g_humidificador.inicializar();
     g_humidificador.establecerNotificador(&g_cloud);
-    g_acController.inicializar();
-    g_acController.establecerNotificador(&g_cloud);
     g_configCache.inicializar();
 
     // Arranque seguro: cargar config de NVS (si existe) ANTES de crear las tareas.
@@ -115,20 +114,16 @@ void tareaSensores(void* parametro) {
             mDe["releEncendido"] = g_humidificador.estadoDescanso();
 
             contadorLote++;
-            if (contadorLote >= 6) {
+            if (contadorLote >= Config::INTERVALO_LOTE_HISTORIAL_MUESTRAS) {
                 JsonDocument lote;
                 JsonArray arr = lote.to<JsonArray>();
                 JsonObject loteAt = arr.add<JsonObject>();
                 loteAt["zona"] = "atriles";
                 loteAt["muestras"] = arrAt;
-                loteAt["acTemperaturaInterior"] = g_acController.obtenerEstadoAtriles().temperaturaInterior;
-                loteAt["acEncendido"] = g_acController.obtenerEstadoAtriles().power;
 
                 JsonObject loteDe = arr.add<JsonObject>();
                 loteDe["zona"] = "descanso";
                 loteDe["muestras"] = arrDe;
-                loteDe["acTemperaturaInterior"] = g_acController.obtenerEstadoDescanso().temperaturaInterior;
-                loteDe["acEncendido"] = g_acController.obtenerEstadoDescanso().power;
 
                 String envelope;
                 JsonDocument mensaje;
@@ -153,7 +148,6 @@ void tareaSensores(void* parametro) {
 
 void tareaControl(void* parametro) {
     (void)parametro;
-    uint32_t ultimoControlAcMillis = 0;
 
     for (;;) {
         if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) == pdTRUE) {
@@ -163,7 +157,11 @@ void tareaControl(void* parametro) {
             bool offlineFallback = g_cloud.millisDesdeUltimoContactoExitoso() > Config::TIMEOUT_OFFLINE_FALLBACK_MS;
             g_humidificador.actualizarControl(at, de, g_config, offlineFallback);
 
-            // Aplicar comando manual pendiente recibido por WS (humidificador; AC se maneja aparte).
+            // LED indicador: refleja el estado REAL del relé (confirmado por Modbus), no una intención.
+            digitalWrite(Config::PIN_LED_ATRILES, g_humidificador.estadoAtriles() ? HIGH : LOW);
+            digitalWrite(Config::PIN_LED_DESCANSO, g_humidificador.estadoDescanso() ? HIGH : LOW);
+
+            // Aplicar comando manual pendiente recibido por WS.
             ComandoEntrante cmd = g_cloud.tomarComandoPendiente();
             if (cmd.pendiente && cmd.tipo == "humidificador") {
                 bool exito = g_releClient.escribirCanal(
@@ -172,16 +170,7 @@ void tareaControl(void* parametro) {
                 );
                 g_cloud.enviarAck(cmd.orderId, exito, exito ? "" : "El módulo de relés no confirmó la orden.");
             } else if (cmd.pendiente) {
-                // Comandos de AC (ac_power/ac_temp/ac_modo/ac_fan): se resuelven en la sección de
-                // AC más abajo cuando corresponde, aquí solo se descarta si no aplica a humidificador.
                 g_cloud.enviarAck(cmd.orderId, false, "Tipo de comando no reconocido en esta versión.");
-            }
-
-            // El control de AC es más lento (protocolo LAN Midea) — se evalúa cada ~10s, no cada 1s.
-            uint32_t ahora = millis();
-            if (ahora - ultimoControlAcMillis > 10000) {
-                ultimoControlAcMillis = ahora;
-                g_acController.actualizarControl(g_config.atriles, g_config.descanso, g_config.intervaloConmutacionMinimoSeg);
             }
 
             // Construir snapshot de telemetría para que la tarea de red lo suba.
@@ -192,9 +181,6 @@ void tareaControl(void* parametro) {
             g_telemetria.atriles.modoActual = g_config.atriles.modo;
             g_telemetria.atriles.calidadAire = mqANivel(g_sensores.lecturaMQAtriles());
             g_telemetria.atriles.tendenciaAire = g_sensores.tendenciaAtriles();
-            g_telemetria.atriles.estadoDetalladoAC = g_acController.obtenerEstadoAtriles();
-            g_telemetria.atriles.estadoAireAcondicionado = g_telemetria.atriles.estadoDetalladoAC.power;
-            g_telemetria.atriles.modoAireActual = g_config.atriles.aireAcondicionado.modo;
 
             g_telemetria.descanso.humedadPromedio = de.humedadPromedio;
             g_telemetria.descanso.temperaturaPromedio = de.temperaturaPromedio;
@@ -203,9 +189,6 @@ void tareaControl(void* parametro) {
             g_telemetria.descanso.modoActual = g_config.descanso.modo;
             g_telemetria.descanso.calidadAire = mqANivel(g_sensores.lecturaMQDescanso());
             g_telemetria.descanso.tendenciaAire = g_sensores.tendenciaDescanso();
-            g_telemetria.descanso.estadoDetalladoAC = g_acController.obtenerEstadoDescanso();
-            g_telemetria.descanso.estadoAireAcondicionado = g_telemetria.descanso.estadoDetalladoAC.power;
-            g_telemetria.descanso.modoAireActual = g_config.descanso.aireAcondicionado.modo;
 
             g_telemetria.firmwareVersion = Config::FIRMWARE_VERSION;
 
@@ -240,11 +223,11 @@ void tareaRed(void* parametro) {
                 g_telemetria.estadoWifi = g_wifi.obtenerSsid();
                 g_telemetria.rssiWifi = g_wifi.obtenerRssi();
 
-                if (ahora - ultimoEnvioTelemetriaMillis >= Config::INTERVALO_LOTE_TELEMETRIA_MS) {
+                if (ahora - ultimoEnvioTelemetriaMillis >= Config::INTERVALO_TELEMETRIA_MS) {
                     ultimoEnvioTelemetriaMillis = ahora;
                     g_cloud.enviarTelemetria(g_telemetria);
                 }
-                if (ahora - ultimoEnvioSensoresMillis >= 15000) {
+                if (ahora - ultimoEnvioSensoresMillis >= Config::INTERVALO_ENVIO_SENSORES_MS) {
                     ultimoEnvioSensoresMillis = ahora;
                     g_cloud.enviarSensores(g_matrizSensores);
                 }
@@ -325,6 +308,6 @@ void tareaWatchdog(void* parametro) {
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        vTaskDelay(pdMS_TO_TICKS(Config::INTERVALO_IMPRESION_ESTADO_MS));
     }
 }

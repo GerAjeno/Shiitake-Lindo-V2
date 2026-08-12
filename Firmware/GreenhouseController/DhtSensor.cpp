@@ -71,7 +71,11 @@ bool DhtSensor::leer() {
         if (_fallosConsecutivos < 255) _fallosConsecutivos++;
 
         if (_fallosConsecutivos >= Config::LECTURAS_PARA_DECLARAR_FALLO) {
+            // Ya declarado caído oficialmente: no debe quedar un valor numérico viejo asociado
+            // a un estado OFFLINE/INVALIDO (confunde a la web/BD, que reciben número + estado juntos).
             _ultimaLectura.estado = isnan(humedad) || isnan(temperatura) ? EstadoSensor::OFFLINE : EstadoSensor::LECTURA_INVALIDA;
+            _ultimaLectura.humedad = NAN;
+            _ultimaLectura.temperatura = NAN;
         }
         // Antes de acumular 4 fallos, se conserva el último valor válido conocido (no se interrumpe el control).
     }

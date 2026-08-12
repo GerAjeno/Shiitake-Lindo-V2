@@ -24,8 +24,7 @@ historialRouter.get('/', async (req, res) => {
 
   if (rangoMs <= SEIS_HORAS_MS) {
     const { rows } = await pool.query(
-      `SELECT ts, humedad, temperatura, rele_encendido AS "releEncendido",
-              ac_temp_interior AS "acTemperaturaInterior", ac_encendido AS "acEncendido"
+      `SELECT ts, humedad, temperatura, rele_encendido AS "releEncendido"
        FROM historial WHERE zona = $1 AND ts BETWEEN $2 AND $3 ORDER BY ts ASC`,
       [zona, desde, hasta]
     );

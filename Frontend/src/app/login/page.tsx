@@ -2,14 +2,12 @@
 
 /**
  * @file page.tsx (Login)
- * @description Pantalla de autenticación industrial oscura con Firebase Auth (Correo/Contraseña).
- * Sin cambios de fondo respecto al sistema anterior: Firebase Auth se conserva igual, solo
- * cambió qué hace el backend con la sesión una vez iniciada (ver AuthContext + lib/api.ts).
+ * @description Pantalla de autenticación industrial oscura. Login 100% local: el backend verifica
+ * el correo/contraseña contra Postgres y devuelve una cookie httpOnly de sesión — no depende de
+ * ningún proveedor externo, funciona incluso sin conexión a internet.
  */
 
 import React, { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 import { Lock, Mail, AlertCircle } from "lucide-react";
 import { ShiitakeLogo } from "@/components/icons/ShiitakeLogo";
 import { useRouter } from "next/navigation";
@@ -27,18 +25,18 @@ export default function LoginPage() {
     setCargando(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const datos = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(datos.error ?? "No se pudo iniciar sesión.");
       router.push("/dashboard");
     } catch (err: any) {
       console.error("Error autenticando:", err);
-      const codigo = err?.code || "";
-      if (codigo === "auth/invalid-credential" || codigo === "auth/wrong-password" || codigo === "auth/user-not-found") {
-        setError("Credenciales inválidas. Verifica que el correo y contraseña sean exactos.");
-      } else if (codigo === "auth/too-many-requests") {
-        setError("Demasiados intentos fallidos. Intenta más tarde o pide a un administrador que te cambie la contraseña.");
-      } else {
-        setError(`Error de autenticación (${codigo || err.message}): Verifica tu conexión a internet.`);
-      }
+      setError(err.message ?? "Error de autenticación. Verifica tu conexión con el servidor.");
     } finally {
       setCargando(false);
     }

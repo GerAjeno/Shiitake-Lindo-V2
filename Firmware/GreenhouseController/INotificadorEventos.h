@@ -1,7 +1,7 @@
 /**
  * @file INotificadorEventos.h
  * @description Abstracción para registrar alertas/logs sin acoplar la lógica de control
- * (HumidifierController, AcController) directamente a CloudClient (DIP).
+ * (HumidifierController) directamente a CloudClient (DIP).
  */
 #ifndef INOTIFICADOREVENTOS_H
 #define INOTIFICADOREVENTOS_H

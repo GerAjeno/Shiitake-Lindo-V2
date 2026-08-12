@@ -9,7 +9,7 @@
 
 import React, { useState } from "react";
 import type { TelemetriaZona, ConfiguracionZona } from "@shared/types";
-import { Droplets, Thermometer, Wind, Power, Sliders, CheckCircle2, AlertTriangle, Snowflake, CircleAlert } from "lucide-react";
+import { Droplets, Thermometer, Wind, Power, Sliders, CheckCircle2, AlertTriangle, CircleAlert } from "lucide-react";
 
 interface PropsTarjetaZona {
   nombreZona: string;
@@ -43,15 +43,10 @@ export function ZoneCard({
   const releEncendido = telemetria?.estadoHumidificador || false;
   const modoTexto = telemetria?.modoControl === "TEMPORIZADO" ? "TEMP" : telemetria?.modoControl === "AUTO" ? "AUTO" : "MANUAL";
 
-  const acEncendido = telemetria?.estadoAireAcondicionado || false;
-  const acModoTexto = telemetria?.modoControlAc === "AUTO" ? "AUTO" : "MANUAL";
-
   const falloDHT = telemetria?.falloCriticoDHT || false;
 
   const humMin = configuracion?.humedadMinima ?? 75;
   const humMax = configuracion?.humedadMaxima ?? 85;
-  const acTempMin = configuracion?.aireAcondicionado?.temperaturaMinima ?? 10;
-  const acTempMax = configuracion?.aireAcondicionado?.temperaturaMaxima ?? 30;
 
   const puedeClickear = puedeControlar && telemetria?.modoControl === "MANUAL" && !enviando;
 
@@ -108,16 +103,6 @@ export function ZoneCard({
               </div>
             </div>
           </button>
-
-          <div className="flex flex-1 w-full sm:w-auto items-center gap-3 bg-slate-100 dark:bg-slate-900/80 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner">
-            <Snowflake className={`w-5 h-5 ${acEncendido ? "text-blue-500 dark:text-blue-400 animate-pulse" : "text-slate-400 dark:text-slate-500"}`} />
-            <div>
-              <div className="text-[10px] text-slate-500 uppercase font-mono">A/C Khöne</div>
-              <div className={`text-sm font-extrabold font-mono ${acEncendido ? "text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400"}`}>
-                {acEncendido ? "ON" : "OFF"} <span className="text-[10px] font-normal opacity-70">({acModoTexto})</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -159,9 +144,6 @@ export function ZoneCard({
           <div className="flex items-baseline gap-1.5 my-2">
             <span className="text-3xl lg:text-4xl font-extrabold text-slate-800 dark:text-slate-100 font-sans tracking-tight">{tempPromedio}</span>
             <span className="text-lg font-bold text-slate-500 dark:text-slate-400 font-mono">°C</span>
-          </div>
-          <div className="text-[11px] font-mono text-emerald-700 dark:text-emerald-300/80 border-t border-slate-200 dark:border-slate-800/60 pt-2 mt-1">
-            Banda AC: {acTempMax}°C (ON) - {acTempMin}°C (OFF)
           </div>
         </div>
 

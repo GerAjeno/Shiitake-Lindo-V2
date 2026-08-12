@@ -12,12 +12,6 @@ void serializarZona(JsonObject obj, const ConfiguracionZona& zona) {
     obj["umbralAdvertenciaMQ"] = zona.umbralAdvertenciaMQ;
     obj["umbralAlarmaMQ"] = zona.umbralAlarmaMQ;
 
-    JsonObject ac = obj["ac"].to<JsonObject>();
-    ac["modo"] = (int)zona.aireAcondicionado.modo;
-    ac["temperaturaMinima"] = zona.aireAcondicionado.temperaturaMinima;
-    ac["temperaturaMaxima"] = zona.aireAcondicionado.temperaturaMaxima;
-    ac["manualEncendido"] = zona.aireAcondicionado.manualEncendido;
-
     JsonArray rangos = obj["rangos"].to<JsonArray>();
     for (uint8_t i = 0; i < zona.cantidadRangos; i++) {
         JsonObject r = rangos.add<JsonObject>();
@@ -37,14 +31,6 @@ void deserializarZona(JsonObjectConst obj, ConfiguracionZona& zona) {
     zona.temporizadorEncendido = obj["temporizadorEncendido"] | zona.temporizadorEncendido;
     zona.umbralAdvertenciaMQ = obj["umbralAdvertenciaMQ"] | zona.umbralAdvertenciaMQ;
     zona.umbralAlarmaMQ = obj["umbralAlarmaMQ"] | zona.umbralAlarmaMQ;
-
-    JsonObjectConst ac = obj["ac"];
-    if (!ac.isNull()) {
-        zona.aireAcondicionado.modo = (ModoControlAc)(int)(ac["modo"] | (int)zona.aireAcondicionado.modo);
-        zona.aireAcondicionado.temperaturaMinima = ac["temperaturaMinima"] | zona.aireAcondicionado.temperaturaMinima;
-        zona.aireAcondicionado.temperaturaMaxima = ac["temperaturaMaxima"] | zona.aireAcondicionado.temperaturaMaxima;
-        zona.aireAcondicionado.manualEncendido = ac["manualEncendido"] | zona.aireAcondicionado.manualEncendido;
-    }
 
     JsonArrayConst rangos = obj["rangos"];
     if (!rangos.isNull()) {

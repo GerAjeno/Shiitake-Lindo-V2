@@ -27,7 +27,7 @@
 struct ComandoEntrante {
     bool pendiente = false;
     String orderId;
-    String tipo;   // "humidificador" | "ac_power" | "ac_temp" | "ac_modo" | "ac_fan"
+    String tipo;   // "humidificador"
     String zona;   // "atriles" | "descanso"
     bool valorBool = false;
     float valorFloat = 0;

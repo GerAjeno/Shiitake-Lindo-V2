@@ -32,16 +32,20 @@ gh repo create Shiitake-Lindo-V2 --private --source=. --remote=origin
 git add -A && git commit -m "feat: scaffold inicial Shiitake-Lindo V2" && git push -u origin main
 ```
 
-## 5. Service account de Firebase (para que el backend verifique logins)
+## 5. Secreto de sesión (login 100% local, sin proveedores externos)
 
-Firebase Console → proyecto `invernadero-shiitake-iot` → ⚙️ **Project settings** → **Service accounts** → **Generate new private key**. Guardar el JSON descargado como:
+El login se verifica contra Postgres (bcrypt + JWT propio, ver `Backend/src/auth/local.ts`) — no
+depende de ningún servicio externo. Solo hace falta un secreto largo y aleatorio para firmar las
+sesiones, y (opcional) una contraseña fija para la cuenta admin inicial:
 
 ```bash
-mkdir -p infra/secrets
-mv ~/Downloads/invernadero-shiitake-iot-*.json infra/secrets/firebase-service-account.json
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+# copiar el resultado como JWT_SECRET en infra/.env
 ```
 
-(la carpeta `infra/secrets/` está en `.gitignore`, nunca se sube al repo).
+Si dejas `ADMIN_BOOTSTRAP_PASSWORD` vacío en `infra/.env`, el backend genera una contraseña al
+azar para `ADMIN_BOOTSTRAP_EMAIL` la primera vez que arranca y la imprime una sola vez en sus
+logs (`docker compose logs backend`) — cámbiala después del primer login.
 
 ## 6. Clave de firma OTA (Ed25519)
 
@@ -76,16 +80,31 @@ Verificar `https://prueba.ger-cloud.cc/api/health` → `{"ok":true}` antes de se
 
 ## 9. Migrar configuración e historial reciente desde el Firebase viejo
 
+Este es el único punto de todo el despliegue que todavía toca Firebase — es un script de
+**uso único** que lee el RTDB del proyecto anterior (`invernadero-shiitake-iot`) para traer datos
+existentes; no tiene relación con el login (100% local ahora) ni queda instalado en el stack
+permanente.
+
+Descargar una service account key **solo para correr este script**: Firebase Console → proyecto
+`invernadero-shiitake-iot` → ⚙️ **Project settings** → **Service accounts** → **Generate new
+private key**, y guardar el JSON en cualquier ruta temporal (no dentro del repo):
+
+```bash
+mkdir -p /tmp/migracion-firebase
+mv ~/Downloads/invernadero-shiitake-iot-*.json /tmp/migracion-firebase/service-account.json
+```
+
 ```bash
 cd Backend
 DATABASE_URL=postgres://shiitake:TU_CLAVE@localhost:5432/shiitake \
-FIREBASE_SERVICE_ACCOUNT_PATH=../infra/secrets/firebase-service-account.json \
+FIREBASE_SERVICE_ACCOUNT_PATH=/tmp/migracion-firebase/service-account.json \
 DIAS_HISTORIAL_RECIENTE=7 \
 npm run migrar:firebase
 ```
 
 Migra config de ambas zonas + últimos 7 días de historial + alertas activas. Los 3 años
 completos de histórico quedan para después (aprobado explícitamente). El RTDB viejo no se toca.
+Al terminar, borrar `/tmp/migracion-firebase/` — esa clave ya no se necesita para nada más.
 
 ## 10. Respaldo de emergencia
 

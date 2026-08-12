@@ -3,14 +3,12 @@
 /**
  * @file FirmwareManager.tsx
  * @description Panel de actualización OTA — visible solo para admin (gateado en settings/page.tsx).
- * Ahora el endpoint exige el token de Firebase (Authorization: Bearer) y el backend firma el
- * binario (SHA-256 + Ed25519) antes de notificar al ESP32, a diferencia del sistema anterior que
- * no tenía ninguna autenticación en este endpoint.
+ * El endpoint exige sesión (cookie httpOnly) y el backend firma el binario (SHA-256 + Ed25519)
+ * antes de notificar al ESP32, a diferencia del sistema anterior que no tenía autenticación aquí.
  */
 
 import React, { useState } from "react";
 import { Upload, Cpu, CheckCircle2, AlertCircle, RefreshCw, HardDrive, ShieldCheck } from "lucide-react";
-import { auth } from "@/lib/firebase";
 import type { TelemetriaActual } from "@shared/types";
 
 interface Props {
@@ -43,14 +41,12 @@ export const FirmwareManager: React.FC<Props> = ({ actual }) => {
     setMensaje({ texto: "Subiendo firmware y firmando en el servidor...", tipo: "info" });
 
     try {
-      const usuario = auth.currentUser;
-      if (!usuario) throw new Error("Sesión expirada.");
-      const token = await usuario.getIdToken();
       const version = `OTA_${new Date().toISOString().replace(/[:.]/g, "-")}`;
 
       const res = await fetch("/api/firmware", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "x-firmware-version": version },
+        credentials: "include",
+        headers: { "x-firmware-version": version },
         body: archivo,
       });
       const data = await res.json();

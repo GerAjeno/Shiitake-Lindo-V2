@@ -11,7 +11,6 @@
 
 enum class EstadoSensor : uint8_t { OK, OFFLINE, LECTURA_INVALIDA };
 enum class ModoControl : uint8_t { AUTOMATICO, MANUAL, TEMPORIZADO };
-enum class ModoControlAc : uint8_t { AUTOMATICO, MANUAL };
 enum class NivelCalidadAire : uint8_t { BAJO, MEDIO, ALTO, MUY_ALTO };
 enum class TendenciaAire : uint8_t { SUBIENDO, ESTABLE, BAJANDO };
 
@@ -30,9 +29,6 @@ inline const char* aTexto(ModoControl v) {
         case ModoControl::TEMPORIZADO: return "TEMPORIZADO";
         default: return "MANUAL";
     }
-}
-inline const char* aTexto(ModoControlAc v) {
-    return v == ModoControlAc::AUTOMATICO ? "AUTO" : "MANUAL";
 }
 inline const char* aTexto(NivelCalidadAire v) {
     switch (v) {
@@ -67,22 +63,6 @@ struct MatrizSensores {
     LecturaMQ mq1, mq2;
 };
 
-struct EstadoDetalladoAC {
-    bool power = false;
-    uint8_t modoFisico = 1;       // 1=Auto,2=Cool,3=Dry,4=Heat,5=Fan
-    uint8_t velocidadVentilador = 102; // 102=Auto,80=High,60=Medium,40=Low
-    float temperaturaObjetivo = 24.0f;
-    float temperaturaInterior = NAN;
-    bool comunicacionOk = false;
-};
-
-struct ConfiguracionAireAcondicionado {
-    ModoControlAc modo = ModoControlAc::AUTOMATICO;
-    float temperaturaMinima = 22.0f;
-    float temperaturaMaxima = 26.0f;
-    bool manualEncendido = false;
-};
-
 struct RangoHorario {
     String id;
     String inicio; // "HH:mm"
@@ -98,7 +78,6 @@ struct ConfiguracionZona {
     bool temporizadorEncendido = false;
     RangoHorario rangosHorarios[8];
     uint8_t cantidadRangos = 0;
-    ConfiguracionAireAcondicionado aireAcondicionado;
     int umbralAdvertenciaMQ = 1500;
     int umbralAlarmaMQ = 2800;
 };
@@ -122,9 +101,6 @@ struct TelemetriaZona {
     bool estadoHumidificador = false;
     ModoControl modoActual = ModoControl::AUTOMATICO;
     bool falloCriticoDHT = false;
-    bool estadoAireAcondicionado = false;
-    ModoControlAc modoAireActual = ModoControlAc::AUTOMATICO;
-    EstadoDetalladoAC estadoDetalladoAC;
 };
 
 struct TelemetriaActual {

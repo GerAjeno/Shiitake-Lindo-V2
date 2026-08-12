@@ -66,17 +66,6 @@ void CloudClient::aplicarConfiguracionZona(JsonObjectConst obj, ConfiguracionZon
     if (!obj["umbralAdvertenciaMQ"].isNull()) zona.umbralAdvertenciaMQ = obj["umbralAdvertenciaMQ"];
     if (!obj["umbralAlarmaMQ"].isNull()) zona.umbralAlarmaMQ = obj["umbralAlarmaMQ"];
 
-    JsonObjectConst ac = obj["aireAcondicionado"];
-    if (!ac.isNull()) {
-        if (!ac["modo"].isNull()) {
-            String m = ac["modo"].as<String>();
-            zona.aireAcondicionado.modo = (m == "MANUAL") ? ModoControlAc::MANUAL : ModoControlAc::AUTOMATICO;
-        }
-        if (!ac["temperaturaMinima"].isNull()) zona.aireAcondicionado.temperaturaMinima = ac["temperaturaMinima"];
-        if (!ac["temperaturaMaxima"].isNull()) zona.aireAcondicionado.temperaturaMaxima = ac["temperaturaMaxima"];
-        if (!ac["manualEncendido"].isNull()) zona.aireAcondicionado.manualEncendido = ac["manualEncendido"];
-    }
-
     JsonArrayConst rangos = obj["rangosHorarios"];
     if (!rangos.isNull()) {
         zona.cantidadRangos = 0;
@@ -161,15 +150,6 @@ void CloudClient::enviarTelemetria(const TelemetriaActual& t) {
         o["estadoHumidificador"] = z.estadoHumidificador;
         o["modoControl"] = aTexto(z.modoActual);
         o["falloCriticoDHT"] = z.falloCriticoDHT;
-        o["estadoAireAcondicionado"] = z.estadoAireAcondicionado;
-        o["modoControlAc"] = aTexto(z.modoAireActual);
-        JsonObject ac = o["estadoDetalladoAC"].to<JsonObject>();
-        ac["power"] = z.estadoDetalladoAC.power;
-        ac["modoFisico"] = z.estadoDetalladoAC.modoFisico;
-        ac["velocidadVentilador"] = z.estadoDetalladoAC.velocidadVentilador;
-        ac["temperaturaObjetivo"] = z.estadoDetalladoAC.temperaturaObjetivo;
-        ac["temperaturaInterior"] = z.estadoDetalladoAC.temperaturaInterior;
-        ac["comunicacionOk"] = z.estadoDetalladoAC.comunicacionOk;
     };
     volcarZona(d["atriles"].to<JsonObject>(), t.atriles);
     volcarZona(d["descanso"].to<JsonObject>(), t.descanso);

@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <mbedtls/sha256.h>
+#include <mbedtls/version.h>
 #include <mbedtls/base64.h>
 #include <Ed25519.h>
 #include <esp_ota_ops.h>
@@ -34,7 +35,11 @@ String bytesAHex(const uint8_t* datos, size_t longitud) {
 bool OtaManager::verificarYFlashear(uint8_t* buffer, size_t tamano, const String& sha256Esperado, const String& firmaBase64) {
     // 1) Verificar SHA-256
     uint8_t digest[32];
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
     mbedtls_sha256(buffer, tamano, digest, 0);
+#else
+    mbedtls_sha256_ret(buffer, tamano, digest, 0);
+#endif
     String sha256Calculado = bytesAHex(digest, 32);
     if (!sha256Calculado.equalsIgnoreCase(sha256Esperado)) {
         Serial.printf("[OTA ERROR] SHA-256 no coincide. Esperado=%s Calculado=%s\n", sha256Esperado.c_str(), sha256Calculado.c_str());

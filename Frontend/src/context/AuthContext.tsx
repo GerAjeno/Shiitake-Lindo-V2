@@ -2,22 +2,25 @@
 
 /**
  * @file AuthContext.tsx
- * @description Proveedor de contexto para la sesión de usuario autenticado en Firebase Auth.
- * Protege las rutas privadas del panel web. El rol (admin/operador/lectura) se obtiene del
- * backend nuevo (Postgres), no de Firebase — Firebase solo identifica quién es el usuario.
+ * @description Proveedor de contexto para la sesión de usuario. La sesión vive en una cookie
+ * httpOnly emitida por el backend (ver auth/local.ts) — este contexto solo pregunta "¿quién soy?"
+ * (GET /api/me) al cargar la app; no hay ningún SDK externo de autenticación de por medio.
  */
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User, signOut as firebaseSignOut } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import { obtenerRolPropio } from "@/lib/api";
+import { apiFetch, obtenerRolPropio } from "@/lib/api";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import type { RolUsuario } from "@shared/types";
 
+interface UsuarioSesion {
+  uid: string;
+  email: string;
+}
+
 interface ContextoAuth {
-  usuario: User | null;
+  usuario: UsuarioSesion | null;
   rol: RolUsuario | null;
   cargando: boolean;
   cerrarSesion: () => Promise<void>;
@@ -31,40 +34,32 @@ const AuthContext = createContext<ContextoAuth>({
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [usuario, setUsuario] = useState<User | null>(null);
+  const [usuario, setUsuario] = useState<UsuarioSesion | null>(null);
   const [rol, setRol] = useState<RolUsuario | null>(null);
-
-  const [cargando, setCargando] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("shiitake_logged_in") !== "true";
-    }
-    return true;
-  });
+  const [cargando, setCargando] = useState(true);
 
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    const cancelarSuscripcion = onAuthStateChanged(auth, async (usr) => {
-      setUsuario(usr);
-
-      if (usr) {
-        localStorage.setItem("shiitake_logged_in", "true");
-        try {
-          const { rol: rolResuelto } = await obtenerRolPropio();
-          setRol(rolResuelto);
-        } catch (err) {
-          console.error("No se pudo resolver el rol del usuario contra el backend:", err);
-          setRol(null);
-        }
-      } else {
-        localStorage.removeItem("shiitake_logged_in");
+    let cancelado = false;
+    (async () => {
+      try {
+        const propio = await obtenerRolPropio();
+        if (cancelado) return;
+        setUsuario({ uid: propio.uid, email: propio.email });
+        setRol(propio.rol);
+      } catch {
+        if (cancelado) return;
+        setUsuario(null);
         setRol(null);
+      } finally {
+        if (!cancelado) setCargando(false);
       }
-      setCargando(false);
-    });
-
-    return () => cancelarSuscripcion();
+    })();
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -78,9 +73,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [usuario, cargando, pathname, router]);
 
   const cerrarSesion = async () => {
-    localStorage.removeItem("shiitake_logged_in");
-    await firebaseSignOut(auth);
-    router.push("/login");
+    try {
+      await apiFetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      setUsuario(null);
+      setRol(null);
+      router.push("/login");
+    }
   };
 
   return (

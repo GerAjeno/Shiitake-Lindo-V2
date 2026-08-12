@@ -12,8 +12,20 @@ void SensorManager::inicializar() {
 }
 
 void SensorManager::leerTodos() {
-    _dht1.leer(); _dht2.leer(); _dht3.leer(); _dht4.leer();
-    _mq1.leer(); _mq2.leer();
+    // Respiro entre cada lectura DHT (bit-banging de ~5ms con interrupciones deshabilitadas):
+    // leerlos pegados uno tras otro dispara fallos de lectura cruzados entre sensores y puede
+    // gatillar el Interrupt Watchdog (IWDT). Mismo valor que ya estaba probado en el firmware anterior.
+    _dht1.leer();
+    vTaskDelay(pdMS_TO_TICKS(150));
+    _dht2.leer();
+    vTaskDelay(pdMS_TO_TICKS(150));
+    _dht3.leer();
+    vTaskDelay(pdMS_TO_TICKS(150));
+    _dht4.leer();
+    vTaskDelay(pdMS_TO_TICKS(150));
+    _mq1.leer();
+    vTaskDelay(pdMS_TO_TICKS(50));
+    _mq2.leer();
 }
 
 void SensorManager::aplicarSensoresHabilitados(const ConfiguracionSistema& config) {

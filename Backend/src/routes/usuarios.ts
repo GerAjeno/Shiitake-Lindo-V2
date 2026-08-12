@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { pool } from '../db/pool';
 import { requireRole } from '../auth/middleware';
-import { admin } from '../auth/firebase';
+import { hashPassword } from '../auth/local';
 import type { RolUsuario } from '../shared/types';
 
 export const usuariosRouter = Router();
@@ -21,16 +21,22 @@ usuariosRouter.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Se requiere email y rol válido.' });
   }
 
+  const { rows: existentes } = await pool.query('SELECT uid FROM usuarios WHERE email = $1', [email]);
+  if (existentes.length > 0) {
+    return res.status(409).json({ error: 'Ya existe un usuario con ese correo.' });
+  }
+
   const passwordTemporal = crypto.randomBytes(9).toString('base64url');
-  const usuarioFirebase = await admin.auth().createUser({ email, password: passwordTemporal });
-  await pool.query('INSERT INTO usuarios (uid, email, rol, activo) VALUES ($1, $2, $3, true)', [
-    usuarioFirebase.uid, email, rol,
+  const uid = crypto.randomUUID();
+  const hash = await hashPassword(passwordTemporal);
+  await pool.query('INSERT INTO usuarios (uid, email, rol, activo, password_hash) VALUES ($1, $2, $3, true, $4)', [
+    uid, email, rol, hash,
   ]);
   await pool.query(
     `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email) VALUES ('USUARIOS', 'INFO', $1, $2)`,
     [`Usuario creado: ${email} (rol ${rol})`, req.usuario!.email]
   );
-  res.status(201).json({ uid: usuarioFirebase.uid, email, rol, passwordTemporal });
+  res.status(201).json({ uid, email, rol, passwordTemporal });
 });
 
 usuariosRouter.put('/:uid/rol', async (req, res) => {
@@ -62,7 +68,8 @@ usuariosRouter.put('/:uid/password', async (req, res) => {
   if (!nuevaPassword || nuevaPassword.length < 8) {
     return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
   }
-  await admin.auth().updateUser(req.params.uid, { password: nuevaPassword });
+  const hash = await hashPassword(nuevaPassword);
+  await pool.query('UPDATE usuarios SET password_hash = $1 WHERE uid = $2', [hash, req.params.uid]);
   await pool.query(
     `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email) VALUES ('USUARIOS', 'INFO', $1, $2)`,
     [`Contraseña de ${req.params.uid} cambiada por administrador`, req.usuario!.email]

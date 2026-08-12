@@ -12,7 +12,6 @@
 #include <Arduino.h>
 #include "SensorManager.h"
 #include "HumidifierController.h"
-#include "AcController.h"
 #include "RelayModbusClient.h"
 #include "CloudClient.h"
 #include "ConfigCache.h"
@@ -30,7 +29,6 @@ extern bool g_loteHistorialListo;
 extern SensorManager g_sensores;
 extern RelayModbusClient g_releClient;
 extern HumidifierController g_humidificador;
-extern AcController g_acController;
 extern ConfigCache g_configCache;
 extern CloudClient g_cloud;
 extern WiFiManagerHelper g_wifi;

@@ -4,8 +4,10 @@
  * RTDB viejo hacia Postgres. Los 3 años completos de histórico se importan más adelante (el
  * usuario aprobó explícitamente dejar la importación completa para después de hoy).
  *
- * Usa el MISMO service account que ya tiene el backend (misma cuenta Firebase, solo que antes
- * también se usaba RTDB además de Auth) — no hace falta la contraseña del admin viejo.
+ * Usa el service account de ese mismo proyecto Firebase (ya no usado por el backend en producción,
+ * que ahora autentica localmente — ver Backend/src/auth/local.ts). Este script solo lee el RTDB
+ * viejo, es de un solo uso; `firebase-admin` ya no es dependencia del proyecto, así que si vuelves
+ * a correr esto instálalo aparte: `npm install --no-save firebase-admin`.
  *
  * Uso:
  *   DATABASE_URL=postgres://... \

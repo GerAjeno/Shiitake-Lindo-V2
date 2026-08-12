@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { verificarIdToken } from './firebase';
+import { verificarSesion, NOMBRE_COOKIE_SESION } from './local';
 import { pool } from '../db/pool';
 import type { RolUsuario } from '../shared/types';
 
@@ -18,56 +18,36 @@ declare global {
   }
 }
 
-const ADMIN_BOOTSTRAP_EMAIL = process.env.ADMIN_BOOTSTRAP_EMAIL;
-
 /**
- * Busca (o auto-provisiona) el usuario en Postgres a partir de un UID de Firebase
- * ya verificado. Si el email coincide con ADMIN_BOOTSTRAP_EMAIL se le asigna admin
- * en su primer login; cualquier otro usuario nuevo entra con rol "lectura" (seguro
- * por defecto) hasta que un admin le suba el rol desde /api/usuarios.
+ * Vuelve a leer rol/activo desde Postgres en cada request (no se confía en lo que venga
+ * embebido en el JWT para eso) — así un cambio de rol o una suspensión hecha por un admin
+ * toma efecto de inmediato, sin esperar a que la sesión expire (hasta 30 días).
  */
-async function resolverUsuario(uid: string, email: string): Promise<UsuarioAutenticado> {
+async function resolverUsuario(uid: string): Promise<UsuarioAutenticado> {
   const { rows } = await pool.query<{ uid: string; email: string; rol: RolUsuario; activo: boolean }>(
     'SELECT uid, email, rol, activo FROM usuarios WHERE uid = $1',
     [uid]
   );
-
-  if (rows.length > 0) {
-    if (!rows[0].activo) {
-      throw new Error('CUENTA_SUSPENDIDA');
-    }
-    return { uid, email: rows[0].email, rol: rows[0].rol };
-  }
-
-  const rolInicial: RolUsuario = email === ADMIN_BOOTSTRAP_EMAIL ? 'admin' : 'lectura';
-  await pool.query(
-    'INSERT INTO usuarios (uid, email, rol, activo) VALUES ($1, $2, $3, true) ON CONFLICT (uid) DO NOTHING',
-    [uid, email, rolInicial]
-  );
-  console.log(`[AUTH] Usuario nuevo auto-provisionado: ${email} -> rol ${rolInicial}`);
-  return { uid, email, rol: rolInicial };
+  if (rows.length === 0) throw new Error('USUARIO_NO_EXISTE');
+  if (!rows[0].activo) throw new Error('CUENTA_SUSPENDIDA');
+  return { uid: rows[0].uid, email: rows[0].email, rol: rows[0].rol };
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Falta el token de autenticación (Authorization: Bearer <token>).' });
+  const token = req.cookies?.[NOMBRE_COOKIE_SESION];
+  if (!token) {
+    return res.status(401).json({ error: 'No hay sesión activa. Inicia sesión de nuevo.' });
   }
 
   try {
-    const idToken = header.slice('Bearer '.length);
-    const decoded = await verificarIdToken(idToken);
-    if (!decoded.email) {
-      return res.status(401).json({ error: 'El token no tiene email asociado.' });
-    }
-    req.usuario = await resolverUsuario(decoded.uid, decoded.email);
+    const payload = verificarSesion(token);
+    req.usuario = await resolverUsuario(payload.uid);
     next();
   } catch (err) {
     if ((err as Error).message === 'CUENTA_SUSPENDIDA') {
       return res.status(403).json({ error: 'Esta cuenta fue suspendida por un administrador.' });
     }
-    console.warn('[AUTH] Token inválido:', (err as Error).message);
-    return res.status(401).json({ error: 'Token inválido o expirado.' });
+    return res.status(401).json({ error: 'Sesión inválida o expirada. Inicia sesión de nuevo.' });
   }
 }
 
@@ -83,9 +63,11 @@ export function requireRole(...rolesPermitidos: RolUsuario[]) {
   };
 }
 
-/** Verifica el ID token de Firebase enviado en la query string al abrir el WebSocket del navegador. */
-export async function autenticarWebSocketNavegador(idToken: string): Promise<UsuarioAutenticado> {
-  const decoded = await verificarIdToken(idToken);
-  if (!decoded.email) throw new Error('Token sin email.');
-  return resolverUsuario(decoded.uid, decoded.email);
+/**
+ * Verifica la sesión del navegador al abrir el WebSocket. El token llega ya extraído de la
+ * cookie `Cookie` de la petición de upgrade (ver ws/hub.ts) — no viaja por query string.
+ */
+export async function autenticarWebSocketNavegador(token: string): Promise<UsuarioAutenticado> {
+  const payload = verificarSesion(token);
+  return resolverUsuario(payload.uid);
 }

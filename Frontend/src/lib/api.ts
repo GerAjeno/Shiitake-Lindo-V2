@@ -2,23 +2,17 @@
  * @file api.ts
  * @description Cliente REST + helper de WebSocket hacia el backend nuevo. Usa rutas relativas
  * (/api/..., /ws) porque Caddy sirve frontend y backend bajo el mismo dominio — evita CORS.
+ * La sesión viaja en una cookie httpOnly (ver auth/local.ts del backend); el navegador la manda
+ * solo con `credentials: "include"`, no hay ningún token que manejar a mano en el cliente.
  */
-import { auth } from "./firebase";
 import type { RolUsuario } from "@shared/types";
 
-async function obtenerIdToken(): Promise<string> {
-  const usuario = auth.currentUser;
-  if (!usuario) throw new Error("No hay sesión activa.");
-  return usuario.getIdToken();
-}
-
 export async function apiFetch<T = unknown>(path: string, opciones: RequestInit = {}): Promise<T> {
-  const token = await obtenerIdToken();
   const res = await fetch(path, {
     ...opciones,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
       ...(opciones.headers ?? {}),
     },
   });
@@ -34,9 +28,9 @@ export async function obtenerRolPropio(): Promise<{ uid: string; email: string; 
   return apiFetch("/api/me");
 }
 
-/** Construye la URL wss:// del hub de WebSocket para el navegador, con el ID token en la query. */
-export async function construirUrlWebSocketNavegador(): Promise<string> {
-  const token = await obtenerIdToken();
+/** Construye la URL wss:// del hub de WebSocket para el navegador. La cookie de sesión viaja
+ * sola en la petición de upgrade (mismo origen, vía Caddy) — no hace falta pasar ningún token. */
+export function construirUrlWebSocketNavegador(): string {
   const protocolo = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocolo}//${window.location.host}/ws?tipo=navegador&token=${encodeURIComponent(token)}`;
+  return `${protocolo}//${window.location.host}/ws?tipo=navegador`;
 }

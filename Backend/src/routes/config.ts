@@ -14,12 +14,6 @@ function filaAZona(fila: any): ConfiguracionZona {
     humidificadorManual: fila.humidificador_manual,
     temporizadorEncendido: fila.temporizador_encendido,
     rangosHorarios: fila.rangos_horarios,
-    aireAcondicionado: {
-      modo: fila.ac_modo,
-      temperaturaMinima: fila.ac_temp_minima,
-      temperaturaMaxima: fila.ac_temp_maxima,
-      manualEncendido: fila.ac_manual_encendido,
-    },
     umbralAdvertenciaMQ: fila.umbral_advertencia_mq,
     umbralAlarmaMQ: fila.umbral_alarma_mq,
   };
@@ -62,20 +56,15 @@ configRouter.put('/:zona', requireRole('admin', 'operador'), async (req, res) =>
        humidificador_manual = COALESCE($5, humidificador_manual),
        temporizador_encendido = COALESCE($6, temporizador_encendido),
        rangos_horarios = COALESCE($7, rangos_horarios),
-       ac_modo = COALESCE($8, ac_modo),
-       ac_temp_minima = COALESCE($9, ac_temp_minima),
-       ac_temp_maxima = COALESCE($10, ac_temp_maxima),
-       ac_manual_encendido = COALESCE($11, ac_manual_encendido),
-       umbral_advertencia_mq = COALESCE($12, umbral_advertencia_mq),
-       umbral_alarma_mq = COALESCE($13, umbral_alarma_mq),
+       umbral_advertencia_mq = COALESCE($8, umbral_advertencia_mq),
+       umbral_alarma_mq = COALESCE($9, umbral_alarma_mq),
        actualizado_en = now()
      WHERE zona = $1`,
     [
       zona,
       c.humedadMinima, c.humedadMaxima, c.modo, c.humidificadorManual, c.temporizadorEncendido,
       c.rangosHorarios ? JSON.stringify(c.rangosHorarios) : null,
-      c.aireAcondicionado?.modo, c.aireAcondicionado?.temperaturaMinima, c.aireAcondicionado?.temperaturaMaxima,
-      c.aireAcondicionado?.manualEncendido, c.umbralAdvertenciaMQ, c.umbralAlarmaMQ,
+      c.umbralAdvertenciaMQ, c.umbralAlarmaMQ,
     ]
   );
 

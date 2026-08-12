@@ -45,8 +45,8 @@ export function useRealtimeData() {
 
     async function conectar() {
       if (cancelado) return;
-      const url = await construirUrlWebSocketNavegador().catch(() => null);
-      if (!url || cancelado) return;
+      const url = construirUrlWebSocketNavegador();
+      if (cancelado) return;
 
       const ws = new WebSocket(url);
       wsRef.current = ws;

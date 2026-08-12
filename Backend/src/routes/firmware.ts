@@ -22,7 +22,7 @@ firmwareRouter.get('/', requireAuth, requireRole('admin'), async (_req, res) => 
   res.json(rows);
 });
 
-// Descarga pública (sin auth): el ESP32 no maneja tokens Firebase. La integridad
+// Descarga pública (sin auth): el ESP32 no tiene sesión de navegador. La integridad
 // la garantiza la verificación de SHA-256 + firma Ed25519 que hace el propio firmware.
 firmwareRouter.get('/:version/download', (req, res) => {
   const archivo = path.join(FIRMWARE_DIR, `${req.params.version}.bin`);

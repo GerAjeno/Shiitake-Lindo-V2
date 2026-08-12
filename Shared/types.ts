@@ -8,7 +8,7 @@
 export type RolUsuario = 'admin' | 'operador' | 'lectura';
 
 export interface Usuario {
-  uid: string; // UID de Firebase Auth
+  uid: string; // uuid generado localmente al crear la cuenta (ver Backend/src/routes/usuarios.ts)
   email: string;
   rol: RolUsuario;
   activo: boolean;
@@ -19,7 +19,6 @@ export type EstadoSensor = 'OK' | 'Offline' | 'Lectura Inválida';
 export type NivelCalidadAire = 'Bajo' | 'Medio' | 'Alto' | 'Muy Alto';
 export type TendenciaAire = 'Subiendo' | 'Estable' | 'Bajando';
 export type ModoControl = 'AUTO' | 'MANUAL' | 'TEMPORIZADO';
-export type ModoControlAc = 'AUTO' | 'MANUAL';
 export type NombreZona = 'atriles' | 'descanso';
 
 export interface RangoHorario {
@@ -50,22 +49,6 @@ export interface MatrizSensores {
   mq2: LecturaMQ;
 }
 
-export interface EstadoDetalladoAC {
-  power: boolean;
-  modoFisico: 'Auto' | 'Cool' | 'Heat' | 'Dry' | 'Fan';
-  velocidadVentilador: 'Auto' | 'High' | 'Medium' | 'Low';
-  temperaturaObjetivo: number;
-  temperaturaInterior: number | null;
-  comunicacionOk: boolean;
-}
-
-export interface ConfiguracionAireAcondicionado {
-  modo: ModoControlAc;
-  temperaturaMinima: number;
-  temperaturaMaxima: number;
-  manualEncendido: boolean;
-}
-
 export interface ConfiguracionZona {
   humedadMinima: number;
   humedadMaxima: number;
@@ -73,7 +56,6 @@ export interface ConfiguracionZona {
   humidificadorManual: boolean;
   temporizadorEncendido: boolean;
   rangosHorarios: RangoHorario[];
-  aireAcondicionado: ConfiguracionAireAcondicionado;
   umbralAdvertenciaMQ: number;
   umbralAlarmaMQ: number;
 }
@@ -96,9 +78,6 @@ export interface TelemetriaZona {
   estadoHumidificador: boolean;
   modoControl: ModoControl;
   falloCriticoDHT: boolean;
-  estadoAireAcondicionado: boolean;
-  modoControlAc: ModoControlAc;
-  estadoDetalladoAC: EstadoDetalladoAC;
 }
 
 export interface TelemetriaActual {
@@ -140,11 +119,7 @@ export interface LogSistema {
 // Comandos manuales enviados desde la web hacia el ESP32 (vía WebSocket)
 // ============================================================================
 export type TipoComandoManual =
-  | { tipo: 'humidificador'; zona: NombreZona; encender: boolean }
-  | { tipo: 'ac_power'; zona: NombreZona; encender: boolean }
-  | { tipo: 'ac_temp'; zona: NombreZona; valor: number }
-  | { tipo: 'ac_modo'; zona: NombreZona; valor: EstadoDetalladoAC['modoFisico'] }
-  | { tipo: 'ac_fan'; zona: NombreZona; valor: EstadoDetalladoAC['velocidadVentilador'] };
+  | { tipo: 'humidificador'; zona: NombreZona; encender: boolean };
 
 export interface ComandoManual {
   orderId: string; // uuid, generado por el backend
@@ -190,8 +165,6 @@ export interface MuestraCruda {
 export interface LoteHistorial {
   zona: NombreZona;
   muestras: MuestraCruda[];
-  acTemperaturaInterior?: number;
-  acEncendido?: boolean;
 }
 
 export type MensajeClienteAServidor =
