@@ -66,16 +66,19 @@ export function enviarOtaADispositivo(estadoOta: import('../shared/types').Estad
 export async function enviarComandoADispositivo(
   comando: TipoComandoManual
 ): Promise<{ ejecutado: boolean; error?: string }> {
+  console.log('[WS] enviarComandoADispositivo — dispositivoConectado():', dispositivoConectado());
   if (!dispositivoConectado()) {
     return { ejecutado: false, error: 'El dispositivo está desconectado.' };
   }
 
   const orderId = uuid();
   const mensaje: ComandoManual = { orderId, comando, emitidoEn: new Date().toISOString() };
+  console.log('[WS] Enviando comando al dispositivo:', JSON.stringify(mensaje));
 
   const resultado = new Promise<{ ejecutado: boolean; error?: string }>((resolve) => {
     const timeout = setTimeout(() => {
       comandosPendientes.delete(orderId);
+      console.log(`[WS] orderId=${orderId} — timeout de 5s sin ACK del dispositivo.`);
       resolve({ ejecutado: false, error: 'El dispositivo no confirmó la orden en 5 segundos.' });
     }, 5000);
     comandosPendientes.set(orderId, {
@@ -177,6 +180,7 @@ async function procesarMensajeDispositivo(dispositivoId: string, mensaje: Mensaj
       break;
     }
     case 'ack': {
+      console.log('[WS] ACK recibido del dispositivo:', JSON.stringify(mensaje.datos));
       const pendiente = comandosPendientes.get(mensaje.datos.orderId);
       if (pendiente) {
         clearTimeout(pendiente.timeout);
@@ -246,6 +250,7 @@ export function iniciarWebSocketHub(server: http.Server) {
             return;
           }
           if (mensaje.tipo !== 'comando') return;
+          console.log(`[WS] Comando recibido de ${usuario.email}:`, JSON.stringify(mensaje.datos), 'clienteOrderId:', (mensaje as any).clienteOrderId);
 
           // `TipoComandoManual` es solo un tipo de TypeScript — se borra en runtime. Sin esta
           // validación, un payload arbitrario del navegador se relaya tal cual al ESP32 (que
