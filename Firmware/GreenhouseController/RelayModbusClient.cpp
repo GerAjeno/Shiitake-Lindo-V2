@@ -60,7 +60,16 @@ bool RelayModbusClient::escribirCanal(uint8_t canal, bool encender) {
     // El módulo hace eco exacto de la trama enviada (confirmado con el manual del fabricante,
     // incluso en modo broadcast 0xFF) — si no llega o no coincide, se reporta fallo de confirmación.
     if (!leerRespuesta(respuesta, 8)) return false;
-    return memcmp(trama, respuesta, 8) == 0;
+    if (memcmp(trama, respuesta, 8) != 0) return false;
+
+    // El eco por sí solo no distingue una respuesta real del módulo de un acoplamiento eléctrico
+    // TX->RX (p. ej. módulo desconectado o mal cableado, donde el ESP32 termina "escuchando" su
+    // propia transmisión): se confirma además con una lectura independiente del estado real de
+    // las bobinas (función 0x01, trama distinta a la de escritura) antes de declarar éxito.
+    bool canal0Encendido, canal1Encendido;
+    if (!leerEstado(canal0Encendido, canal1Encendido)) return false;
+    bool estadoConfirmado = (canal == 0) ? canal0Encendido : canal1Encendido;
+    return estadoConfirmado == encender;
 }
 
 bool RelayModbusClient::leerEstado(bool& canal0Encendido, bool& canal1Encendido) {
