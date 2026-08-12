@@ -23,6 +23,7 @@ interface ContextoAuth {
   usuario: UsuarioSesion | null;
   rol: RolUsuario | null;
   cargando: boolean;
+  iniciarSesion: (email: string, password: string) => Promise<void>;
   cerrarSesion: () => Promise<void>;
 }
 
@@ -30,6 +31,7 @@ const AuthContext = createContext<ContextoAuth>({
   usuario: null,
   rol: null,
   cargando: true,
+  iniciarSesion: async () => {},
   cerrarSesion: async () => {},
 });
 
@@ -72,6 +74,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [usuario, cargando, pathname, router]);
 
+  /**
+   * Autentica y actualiza el estado de sesión directamente (en vez de solo redirigir a ciegas):
+   * antes, login/page.tsx hacía su propio fetch y navegaba con router.push("/dashboard") sin
+   * tocar este contexto, así que `usuario` seguía en null — el efecto de arriba lo detectaba y
+   * rebotaba de inmediato de vuelta a /login. Centralizar el login acá evita ese desfase.
+   */
+  const iniciarSesion = async (email: string, password: string) => {
+    const propio = await apiFetch<{ uid: string; email: string; rol: RolUsuario }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    setUsuario({ uid: propio.uid, email: propio.email });
+    setRol(propio.rol);
+  };
+
   const cerrarSesion = async () => {
     try {
       await apiFetch("/api/auth/logout", { method: "POST" });
@@ -83,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ usuario, rol, cargando, cerrarSesion }}>
+    <AuthContext.Provider value={{ usuario, rol, cargando, iniciarSesion, cerrarSesion }}>
       {cargando ? (
         pathname !== "/login" ? (
           <div className="min-h-screen flex bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300">

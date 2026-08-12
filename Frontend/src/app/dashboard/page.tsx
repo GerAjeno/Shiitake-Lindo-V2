@@ -41,7 +41,7 @@ export default function DashboardPage() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header conectadoRTDB={conectado} espOnline={espOnline} />
         <main className="flex-1 p-4 pb-24 md:p-8 md:pb-8 overflow-y-auto space-y-6">
-          <AlertsBanner alertas={alertas} onResolver={resolverAlerta} />
+          <AlertsBanner alertas={alertas} onResolver={resolverAlerta} puedeResolver={puedeControlar} />
 
           {!espOnline && ultimaTelemetriaTs && (
             <div className="bg-rose-950/90 border-2 border-rose-500/80 p-4 rounded-xl flex items-center gap-3 text-rose-200 font-mono text-xs shadow-xl">

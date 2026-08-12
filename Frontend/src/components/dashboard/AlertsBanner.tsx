@@ -13,12 +13,20 @@ import { AlertOctagon, CheckCircle, Sparkles, Clock } from "lucide-react";
 
 interface PropsAlertas {
   alertas: Alerta[];
-  onResolver: (id: string) => void;
+  onResolver: (id: string) => void | Promise<void>;
+  puedeResolver: boolean;
 }
 
-export function AlertsBanner({ alertas, onResolver }: PropsAlertas) {
+export function AlertsBanner({ alertas, onResolver, puedeResolver }: PropsAlertas) {
   const activas = alertas.filter((a) => !a.resuelta);
   if (activas.length === 0) return null;
+
+  // El backend igual rechaza esto para rol "lectura" (autorización real), pero sin este catch la
+  // promesa de onResolver (async) quedaba rechazada sin manejar si el PUT fallaba — el botón "no
+  // hacía nada" sin avisar, en vez de loguear el error.
+  const manejarResolver = (id: string) => {
+    Promise.resolve(onResolver(id)).catch((err) => console.error("Error al resolver alerta:", err));
+  };
 
   const formatearFechaHora = (ts: string) => {
     const fecha = new Date(ts);
@@ -64,16 +72,18 @@ export function AlertsBanner({ alertas, onResolver }: PropsAlertas) {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => onResolver(notif.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-900 dark:text-emerald-200 text-xs font-mono font-bold transition-colors cursor-pointer"
-              title="Marcar como visto / cerrar"
-            >
-              <CheckCircle className="w-4 h-4" />
-              <span>Marcar visto</span>
-            </button>
-          </div>
+          {puedeResolver && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => manejarResolver(notif.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-900 dark:text-emerald-200 text-xs font-mono font-bold transition-colors cursor-pointer"
+                title="Marcar como visto / cerrar"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Marcar visto</span>
+              </button>
+            </div>
+          )}
         </div>
       ))}
 
@@ -100,16 +110,18 @@ export function AlertsBanner({ alertas, onResolver }: PropsAlertas) {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => onResolver(critica.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-900 dark:text-rose-200 text-xs font-mono font-bold transition-colors cursor-pointer"
-              title="Marcar como resuelta"
-            >
-              <CheckCircle className="w-4 h-4" />
-              <span>Resolver</span>
-            </button>
-          </div>
+          {puedeResolver && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => manejarResolver(critica.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-900 dark:text-rose-200 text-xs font-mono font-bold transition-colors cursor-pointer"
+                title="Marcar como resuelta"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Resolver</span>
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>

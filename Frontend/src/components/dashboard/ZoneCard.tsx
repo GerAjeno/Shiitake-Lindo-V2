@@ -7,7 +7,7 @@
  * control manual del humidificador (confirmado por ACK real del ESP32, nunca éxito optimista).
  */
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import type { TelemetriaZona, ConfiguracionZona } from "@shared/types";
 import { Droplets, Thermometer, Wind, Power, Sliders, CheckCircle2, AlertTriangle, CircleAlert } from "lucide-react";
 
@@ -36,6 +36,10 @@ export function ZoneCard({
 }: PropsTarjetaZona) {
   const [enviando, setEnviando] = useState(false);
   const [ultimoError, setUltimoError] = useState<string | null>(null);
+  // Guarda síncrona además del estado `enviando`: dos clics/taps en la misma tarea de React
+  // pueden ambos leer `enviando === false` antes de que el primer render deshabilite el botón —
+  // el ref se actualiza al instante, sin esperar al próximo commit.
+  const enviandoRef = useRef(false);
 
   const humPromedio = telemetria && telemetria.humedadPromedio !== null ? telemetria.humedadPromedio.toFixed(1) : "--";
   const tempPromedio = telemetria && telemetria.temperaturaPromedio !== null ? telemetria.temperaturaPromedio.toFixed(1) : "--";
@@ -51,7 +55,8 @@ export function ZoneCard({
   const puedeClickear = puedeControlar && telemetria?.modoControl === "MANUAL" && !enviando;
 
   const manejarToggle = async () => {
-    if (!puedeClickear) return;
+    if (!puedeClickear || enviandoRef.current) return;
+    enviandoRef.current = true;
     setEnviando(true);
     setUltimoError(null);
     try {
@@ -59,6 +64,7 @@ export function ZoneCard({
     } catch (e) {
       setUltimoError("Error al enviar el comando.");
     } finally {
+      enviandoRef.current = false;
       setEnviando(false);
     }
   };

@@ -10,14 +10,14 @@
 import React, { useState } from "react";
 import { Lock, Mail, AlertCircle } from "lucide-react";
 import { ShiitakeLogo } from "@/components/icons/ShiitakeLogo";
-import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
-  const router = useRouter();
+  const { iniciarSesion } = useAuth();
 
   const manejarLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,15 +25,9 @@ export default function LoginPage() {
     setCargando(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const datos = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(datos.error ?? "No se pudo iniciar sesión.");
-      router.push("/dashboard");
+      // AuthContext actualiza `usuario`/`rol` acá adentro; su propio efecto se encarga de
+      // redirigir a /dashboard una vez que el estado refleja la sesión real.
+      await iniciarSesion(email, password);
     } catch (err: any) {
       console.error("Error autenticando:", err);
       setError(err.message ?? "Error de autenticación. Verifica tu conexión con el servidor.");

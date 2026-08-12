@@ -30,7 +30,11 @@ export function useRealtimeData() {
   const [ultimaTelemetriaTs, setUltimaTelemetriaTs] = useState<number | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const ackPendienteRef = useRef<((ejecutado: boolean, error?: string) => void) | null>(null);
+  // Puede haber más de un comando en vuelo a la vez (cada tarjeta de zona tiene su propio botón),
+  // así que se correlaciona por clienteOrderId en vez de una sola referencia — con una sola
+  // referencia, el segundo comando pisaba el resolver del primero y el ACK equivocado resolvía la
+  // promesa equivocada.
+  const ackPendientesRef = useRef<Map<string, (ejecutado: boolean, error?: string) => void>>(new Map());
 
   // Snapshot inicial por REST (config + alertas + logs no dependen del WS para la primera carga).
   useEffect(() => {
@@ -79,10 +83,14 @@ export function useRealtimeData() {
           case "alerta":
             setAlertas((prev) => [mensaje.datos, ...prev].slice(0, 500));
             break;
-          case "ack":
-            ackPendienteRef.current?.(mensaje.datos.ejecutado, mensaje.datos.error);
-            ackPendienteRef.current = null;
+          case "ack": {
+            const resolver = ackPendientesRef.current.get(mensaje.datos.orderId);
+            if (resolver) {
+              ackPendientesRef.current.delete(mensaje.datos.orderId);
+              resolver(mensaje.datos.ejecutado, mensaje.datos.error);
+            }
             break;
+          }
         }
       };
     }
@@ -119,15 +127,16 @@ export function useRealtimeData() {
         resolve({ ejecutado: false, error: "Sin conexión con el servidor." });
         return;
       }
+      const clienteOrderId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const timeout = setTimeout(() => {
-        ackPendienteRef.current = null;
+        ackPendientesRef.current.delete(clienteOrderId);
         resolve({ ejecutado: false, error: "Tiempo de espera agotado." });
       }, 6000);
-      ackPendienteRef.current = (ejecutado, error) => {
+      ackPendientesRef.current.set(clienteOrderId, (ejecutado, error) => {
         clearTimeout(timeout);
         resolve({ ejecutado, error });
-      };
-      wsRef.current.send(JSON.stringify({ tipo: "comando", datos: comando }));
+      });
+      wsRef.current.send(JSON.stringify({ tipo: "comando", datos: comando, clienteOrderId }));
     });
   }, []);
 
