@@ -171,7 +171,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     }
 
     controlarLed(0, 255, 0);
-    if (cloud) cloud->registrarAlerta("OTA", "EXITO", "Firmware " + ota.version + " verificado y flasheado. Reiniciando...");
+    if (cloud) cloud->registrarAlerta("OTA", "INFO", "Firmware " + ota.version + " verificado y flasheado. Reiniciando...");
     delay(1500);
     esp_restart();
 }
