@@ -100,7 +100,16 @@ void CloudClient::procesarMensajeEntrante(const String& json) {
     // núcleo bajo el mismo mutex. Sin este lock, un mensaje de configuración/comando/OTA llegando
     // justo cuando tareaControl está leyendo esos mismos campos es una condición de carrera real
     // (riesgo de corrupción de heap o crash), no solo teórica en un sistema dual-core.
-    if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(2000)) != pdTRUE) {
+    //
+    // Timeout corto (200ms, igual al resto del proyecto) y NO 2000ms como en un intento anterior:
+    // este método corre dentro de _ws.loop(), que también atiende el ping/pong del WebSocket —
+    // bloquearlo varios segundos aquí (si tareaControl está ocupada con I/O Modbus) le impedía a
+    // la librería responder el heartbeat a tiempo, y el backend terminaba cerrando la conexión
+    // por timeout — un bucle de reconexión constante que en la práctica es peor que la rara
+    // colisión que este mutex intenta evitar. Perder un mensaje ocasional es recuperable (config
+    // se reenvía en el próximo cambio, comando manual se puede reintentar); una tarea de red
+    // bloqueada 2s repetidamente no lo es.
+    if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) != pdTRUE) {
         Serial.println("[NUBE] No se pudo tomar el mutex de estado a tiempo — mensaje entrante descartado.");
         return;
     }
