@@ -1,5 +1,10 @@
 #include "CloudClient.h"
 
+// Definido en Tasks.cpp — protege todo el estado compartido entre tareas (ver Tasks.h). Este
+// archivo lo necesita porque procesarMensajeEntrante() corre en el núcleo/tarea de red pero
+// escribe estructuras que tareaControl lee en el otro núcleo (ver nota abajo).
+extern SemaphoreHandle_t g_mutexEstado;
+
 CloudClient* CloudClient::_instancia = nullptr;
 
 CloudClient::CloudClient(ConfigCache* cache, ConfiguracionSistema* configRef)
@@ -88,6 +93,18 @@ void CloudClient::procesarMensajeEntrante(const String& json) {
     String tipoMsg = doc["tipo"] | "";
     JsonObjectConst datos = doc["datos"];
 
+    // Este método corre síncronamente dentro de _ws.loop() (ver procesar(), llamado desde
+    // tareaRed SIN el mutex tomado, a propósito, para no bloquear el arranque del WS por red).
+    // Pero de acá para abajo se escribe *_configSistemaRef/_comandoPendiente/_otaPendiente —
+    // estructuras con campos String de Arduino (no atómicos) que tareaControl lee en el otro
+    // núcleo bajo el mismo mutex. Sin este lock, un mensaje de configuración/comando/OTA llegando
+    // justo cuando tareaControl está leyendo esos mismos campos es una condición de carrera real
+    // (riesgo de corrupción de heap o crash), no solo teórica en un sistema dual-core.
+    if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(2000)) != pdTRUE) {
+        Serial.println("[NUBE] No se pudo tomar el mutex de estado a tiempo — mensaje entrante descartado.");
+        return;
+    }
+
     if (tipoMsg == "configuracion") {
         aplicarConfiguracionZona(datos["atriles"], _configSistemaRef->atriles);
         aplicarConfiguracionZona(datos["descanso"], _configSistemaRef->descanso);
@@ -128,6 +145,8 @@ void CloudClient::procesarMensajeEntrante(const String& json) {
         String comando = datos["comando"] | "";
         _otaPendiente.pendiente = (comando == "INICIAR");
     }
+
+    xSemaphoreGive(g_mutexEstado);
 }
 
 void CloudClient::enviarJson(const JsonDocument& doc) {

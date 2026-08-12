@@ -121,8 +121,11 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     }
 
     int tamano = http.getSize();
-    if (tamano <= 0 || tamano > 8 * 1024 * 1024) {
-        Serial.println("[OTA ERROR] Tamaño de firmware inválido.");
+    // Debe caber en una sola partición OTA (app0/app1 = 0x300000 = 3MB, ver partitions.csv) —
+    // antes se aceptaba hasta 8MB, que pasaba este chequeo pero fallaba recién en esp_ota_begin()
+    // tras gastar tiempo/ancho de banda descargando el binario completo a PSRAM.
+    if (tamano <= 0 || tamano > 3 * 1024 * 1024) {
+        Serial.println("[OTA ERROR] Tamaño de firmware inválido (excede el tamaño de partición de 3MB).");
         http.end();
         controlarLed(255, 0, 0);
         _enActualizacion = false;

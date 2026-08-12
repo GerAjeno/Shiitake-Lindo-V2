@@ -40,8 +40,10 @@ void HumidifierController::notificarCambio(uint8_t canal, bool nuevoEstado, Modo
                : "Humedad alcanzó el umbral máximo (" + String(humedad, 1) + "% >= " + String(humMax, 1) + "%)";
     }
 
+    String humedadTexto = isnan(humedad) ? "N/D" : (String(humedad, 1) + "%");
+    String tempTexto = isnan(temperatura) ? "N/D" : (String(temperatura, 1) + "C");
     String mensaje = String("Humidificador ") + zonaNombre + " " + (nuevoEstado ? "ENCENDIDO" : "APAGADO") +
-                      " | Humedad: " + String(humedad, 1) + "% | Temp: " + String(temperatura, 1) + "C | " + motivo;
+                      " | Humedad: " + humedadTexto + " | Temp: " + tempTexto + " | " + motivo;
     _notificador->registrarAlerta(idAlerta, "INFO", mensaje);
     _notificador->registrarLog("ACTUADOR", "INFO", mensaje);
 }
