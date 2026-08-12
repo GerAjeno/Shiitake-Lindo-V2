@@ -8,12 +8,13 @@
  * (REST /api/historial, resolución 30s/5min/hora elegida automáticamente por el servidor).
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, ReferenceLine, Legend,
 } from "recharts";
 import { Calendar, FileSpreadsheet, Database, Droplets, Thermometer, Zap, Activity, Clock, Wind } from "lucide-react";
 import ExcelJS from "exceljs";
+import { toPng } from "html-to-image";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -194,9 +195,13 @@ function CurvasZona({ v, datos, humMin, humMax, formatearEjeX }: { v: VisualZona
 }
 
 export default function HistoryPage() {
-  const [rango, setRango] = useState<FiltroRangoTiempo>("24h");
+  const [rango, setRango] = useState<FiltroRangoTiempo>("1h");
   const [pestañaZona, setPestañaZona] = useState<PestañaZona>("atriles");
   const [exportando, setExportando] = useState(false);
+
+  const chartHumRef = useRef<HTMLDivElement>(null);
+  const chartTempRef = useRef<HTMLDivElement>(null);
+  const chartReleRef = useRef<HTMLDivElement>(null);
 
   const [fechaInicioStr, setFechaInicioStr] = useState<string>(() => new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 16));
   const [fechaFinStr, setFechaFinStr] = useState<string>(() => new Date().toISOString().slice(0, 16));
@@ -287,6 +292,30 @@ export default function HistoryPage() {
         { param: "CO2 / calidad aire promedio", val: estadisticas.descanso.co2Promedio },
         { param: "Humidificador encendido", val: `${Math.floor(estadisticas.descanso.minutosHumidificadorON / 60)}h ${estadisticas.descanso.minutosHumidificadorON % 60}m (${estadisticas.descanso.porcentajeHumidificadorON}%)` },
       ].forEach((f) => hojaResumen.addRow(f));
+
+      // Hoja 3: Curvas y Gráficos (3 gráficas incrustadas como imágenes, capturadas desde el
+      // contenedor oculto renderizado más abajo en el JSX).
+      const hojaGraficos = libro.addWorksheet("Curvas_y_Graficos");
+      hojaGraficos.views = [{ showGridLines: true }];
+      hojaGraficos.columns = [{ width: 5 }, { width: 120 }];
+
+      await new Promise((res) => setTimeout(res, 100));
+
+      if (chartHumRef.current && chartTempRef.current && chartReleRef.current) {
+        const confImg = { backgroundColor: "#0f172a", quality: 0.95, pixelRatio: 2 };
+        const base64Hum = await toPng(chartHumRef.current, confImg);
+        const base64Temp = await toPng(chartTempRef.current, confImg);
+        const base64Rele = await toPng(chartReleRef.current, confImg);
+
+        const imgId1 = libro.addImage({ base64: base64Hum, extension: "png" });
+        hojaGraficos.addImage(imgId1, { tl: { col: 1, row: 1 }, ext: { width: 920, height: 320 } });
+
+        const imgId2 = libro.addImage({ base64: base64Temp, extension: "png" });
+        hojaGraficos.addImage(imgId2, { tl: { col: 1, row: 19 }, ext: { width: 920, height: 320 } });
+
+        const imgId3 = libro.addImage({ base64: base64Rele, extension: "png" });
+        hojaGraficos.addImage(imgId3, { tl: { col: 1, row: 37 }, ext: { width: 920, height: 320 } });
+      }
 
       const buffer = await libro.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -426,6 +455,58 @@ export default function HistoryPage() {
               )}
             </>
           )}
+
+          {/* Contenedor oculto para capturar las 3 gráficas incrustadas en el Excel (off-screen) */}
+          <div className="fixed -left-[9999px] top-0 w-[960px] bg-slate-900 p-6 space-y-8 text-slate-100 font-mono pointer-events-none">
+            <div ref={chartHumRef} className="p-6 bg-slate-900 border border-slate-800 rounded-2xl w-[920px] h-[320px]">
+              <h3 className="text-sm font-bold font-mono text-cyan-400 uppercase mb-4 flex items-center gap-2">
+                <Droplets className="w-4 h-4 text-cyan-400" /> Curva de humedad relativa - Atriles vs Descanso (% RH)
+              </h3>
+              <AreaChart width={870} height={230} data={datosHistoricos}>
+                <defs>
+                  <linearGradient id="gradExHumAt" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradExHumDe" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="timestamp" type="number" domain={["dataMin", "dataMax"]} tickFormatter={formatearEjeX} stroke="#475569" fontSize={11} />
+                <YAxis domain={[40, 100]} stroke="#475569" fontSize={11} unit="%" />
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+                <Area type="monotone" dataKey="humedadAtriles" name="Humedad Atriles (%)" stroke="#06b6d4" strokeWidth={2.5} fillOpacity={1} fill="url(#gradExHumAt)" />
+                <Area type="monotone" dataKey="humedadDescanso" name="Humedad Descanso (%)" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#gradExHumDe)" />
+              </AreaChart>
+            </div>
+
+            <div ref={chartTempRef} className="p-6 bg-slate-900 border border-slate-800 rounded-2xl w-[920px] h-[320px]">
+              <h3 className="text-sm font-bold font-mono text-amber-400 uppercase mb-4 flex items-center gap-2">
+                <Thermometer className="w-4 h-4 text-amber-400" /> Curva de temperatura - Atriles vs Descanso (°C)
+              </h3>
+              <LineChart width={870} height={230} data={datosHistoricos}>
+                <XAxis dataKey="timestamp" type="number" domain={["dataMin", "dataMax"]} tickFormatter={formatearEjeX} stroke="#475569" fontSize={11} />
+                <YAxis domain={["auto", "auto"]} stroke="#475569" fontSize={11} unit="°C" />
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+                <Line type="monotone" dataKey="tempAtriles" name="Temp. Atriles (°C)" stroke="#06b6d4" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="tempDescanso" name="Temp. Descanso (°C)" stroke="#10b981" strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </div>
+
+            <div ref={chartReleRef} className="p-6 bg-slate-900 border border-slate-800 rounded-2xl w-[920px] h-[320px]">
+              <h3 className="text-sm font-bold font-mono text-emerald-400 uppercase mb-4 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-400" /> Tiempo de operación humidificadores - Ciclos ON/OFF
+              </h3>
+              <LineChart width={870} height={230} data={datosHistoricos}>
+                <XAxis dataKey="timestamp" type="number" domain={["dataMin", "dataMax"]} tickFormatter={formatearEjeX} stroke="#475569" fontSize={11} />
+                <YAxis domain={[0, 1]} ticks={[0, 1]} tickFormatter={(v) => (v === 1 ? "ON (1)" : "OFF (0)")} stroke="#475569" fontSize={11} />
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+                <Line type="stepAfter" dataKey="releAtriles" name="Relé Atriles" stroke="#06b6d4" strokeWidth={2.5} dot={false} />
+                <Line type="stepAfter" dataKey="releDescanso" name="Relé Descanso" stroke="#10b981" strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </div>
+          </div>
         </main>
         <Footer />
       </div>
