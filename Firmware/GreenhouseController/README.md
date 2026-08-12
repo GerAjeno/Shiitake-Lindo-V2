@@ -17,7 +17,7 @@ ninguna clase del firmware anterior.
 - `WebSockets` (Links2004 / arduinoWebSockets) — usado por `CloudClient`
 - `Crypto` (rweather) — provee `Ed25519.h`, usado por `OtaManager` para verificar la firma del firmware
 
-El resto (`WiFi`, `HTTPClient`, `WiFiClientSecure`, `Preferences`, `mbedtls/*`, `esp_ota_ops.h`) viene incluido en el core `esp32` de Arduino.
+El resto (`WiFi`, `HTTPClient`, `WiFiClientSecure`, `Preferences`, `Wire`, `mbedtls/*`, `esp_ota_ops.h`) viene incluido en el core `esp32` de Arduino.
 
 ## Antes de compilar
 
@@ -35,8 +35,18 @@ Editar `Config.h` y reemplazar:
 - Núcleo 0: `CloudTask` (WiFi + WebSocket + OTA) y `WatchdogTask` (salud de memoria + confirmación OTA).
 - Todo el estado compartido entre núcleos (`g_config`, `g_telemetria`, etc.) está protegido por `g_mutexEstado` (ver `Tasks.h`/`Tasks.cpp`).
 
+## RTC DS1307 ("Tiny RTC I2C")
+
+- Pines: `PIN_RTC_SDA = GPIO11`, `PIN_RTC_SCL = GPIO12` (ver `Config.h`). Los LEDs de estado se
+  reubicaron a `GPIO1`/`GPIO2` para liberar GPIO11.
+- Al arrancar, si el RTC tiene hora válida (batería no agotada), se usa para poner el reloj del
+  sistema de inmediato — así el historial tiene timestamps correctos aunque no haya WiFi todavía.
+- Una vez que NTP sincroniza, el RTC se recalibra con esa hora (una vez por sesión de WiFi) — el
+  DS1307 no compensa temperatura, así que conviene recalibrarlo seguido.
+- Driver en `IRtc.h`/`Ds1307Rtc.cpp` — mismo patrón de interfaces que los sensores (`ISensor`),
+  para poder cambiar a un DS3231 (más preciso) más adelante sin tocar `Tasks.cpp`.
+
 ## Limitaciones conocidas (documentadas, no bloqueantes para hoy)
 
-- Sin RTC físico: la hora depende de NTP: si se reinicia sin Internet, se pierde la hora exacta hasta reconectar (aceptado explícitamente por el usuario para esta versión).
 - Descubrimiento de los AC Midea por IP estática (sin reserva DHCP posible): si el router les cambia la IP, hay que actualizar `Tasks.cpp` manualmente.
 - El rollback automático de OTA depende de que el bootloader del board package tenga habilitado `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE` (ver comentario en `OtaManager.h`). El reflasheo manual por USB sigue siendo el respaldo real para hoy.

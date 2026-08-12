@@ -1,6 +1,7 @@
 #include "Tasks.h"
 #include "Config.h"
 #include "OtaManager.h"
+#include <sys/time.h> // struct timeval / settimeofday() — usado al ajustar el reloj desde el RTC
 
 SemaphoreHandle_t g_mutexEstado;
 ConfiguracionSistema g_config;
@@ -16,6 +17,7 @@ HumidifierController g_humidificador(&g_releClient);
 ConfigCache g_configCache;
 CloudClient g_cloud(&g_configCache, &g_config);
 WiFiManagerHelper g_wifi(Config::WIFI_SSID_DEFAULT, Config::WIFI_PASSWORD_DEFAULT);
+Ds1307Rtc g_rtc(Config::PIN_RTC_SDA, Config::PIN_RTC_SCL);
 
 static NivelCalidadAire mqANivel(const LecturaMQ& mq) { return mq.nivel; }
 
@@ -69,6 +71,19 @@ void iniciarTareas() {
     g_humidificador.inicializar();
     g_humidificador.establecerNotificador(&g_cloud);
     g_configCache.inicializar();
+
+    // RTC: si tiene hora válida, se usa para poner el reloj del sistema de inmediato — así
+    // timestampIso() (cada muestra del historial) es correcto desde el arranque, sin esperar a
+    // que WiFi/NTP conecten (puede tardar, o no pasar nunca si se perdió el internet).
+    if (g_rtc.inicializar() && g_rtc.horaValida()) {
+        struct timeval tv;
+        tv.tv_sec = g_rtc.obtenerEpocaUtc();
+        tv.tv_usec = 0;
+        settimeofday(&tv, nullptr);
+        Serial.println("[ARRANQUE] Hora del sistema ajustada desde el RTC DS1307.");
+    } else {
+        Serial.println("[ARRANQUE] RTC sin hora válida o no detectado — se usará solo NTP cuando haya WiFi.");
+    }
 
     // Arranque seguro: cargar config de NVS (si existe) ANTES de crear las tareas.
     if (g_configCache.cargarConfiguracion(g_config)) {
@@ -240,6 +255,7 @@ void tareaRed(void* parametro) {
     g_wifi.inicializar();
 
     bool ntpSincronizado = false;
+    bool rtcCalibrado = false;
     uint32_t ultimoEnvioTelemetriaMillis = 0;
     uint32_t ultimoEnvioSensoresMillis = 0;
 
@@ -252,6 +268,19 @@ void tareaRed(void* parametro) {
                 ntpSincronizado = true;
                 g_cloud.inicializar(Config::BACKEND_HOST_DEFAULT, 443, Config::ID_DISPOSITIVO, Config::DEVICE_TOKEN);
             }
+
+            // configTzTime() dispara el sync SNTP pero no es instantáneo — se espera a que
+            // time() dé una fecha plausible (NTP ya aplicó) antes de calibrar el RTC con ella,
+            // una sola vez por sesión de WiFi. Así el RTC se mantiene preciso entre los cortes de
+            // internet, en vez de derivar solo con su propio cristal (el DS1307 no compensa
+            // temperatura).
+            if (!rtcCalibrado && time(nullptr) > 1700000000) { // > nov-2023: NTP ya sincronizó
+                if (g_rtc.ajustarEpocaUtc(time(nullptr))) {
+                    rtcCalibrado = true;
+                    Serial.println("[RED] RTC DS1307 calibrado con la hora de NTP.");
+                }
+            }
+
             g_cloud.procesar();
 
             uint32_t ahora = millis();

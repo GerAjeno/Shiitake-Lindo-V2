@@ -16,6 +16,7 @@
 #include "CloudClient.h"
 #include "ConfigCache.h"
 #include "WiFiManager.h"
+#include "Ds1307Rtc.h"
 #include "Types.h"
 
 extern SemaphoreHandle_t g_mutexEstado;
@@ -32,6 +33,7 @@ extern HumidifierController g_humidificador;
 extern ConfigCache g_configCache;
 extern CloudClient g_cloud;
 extern WiFiManagerHelper g_wifi;
+extern Ds1307Rtc g_rtc;
 
 void iniciarTareas();
 void tareaSensores(void* parametro);
