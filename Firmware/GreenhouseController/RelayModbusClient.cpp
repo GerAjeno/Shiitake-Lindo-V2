@@ -59,16 +59,33 @@ bool RelayModbusClient::escribirCanal(uint8_t canal, bool encender) {
     uint8_t respuesta[8];
     // El módulo hace eco exacto de la trama enviada (confirmado con el manual del fabricante,
     // incluso en modo broadcast 0xFF) — si no llega o no coincide, se reporta fallo de confirmación.
-    if (!leerRespuesta(respuesta, 8)) return false;
-    if (memcmp(trama, respuesta, 8) != 0) return false;
+    if (!leerRespuesta(respuesta, 8)) {
+        Serial.println("[MODBUS] escribirCanal: sin respuesta del módulo (timeout esperando eco).");
+        return false;
+    }
+    if (memcmp(trama, respuesta, 8) != 0) {
+        Serial.print("[MODBUS] escribirCanal: eco no coincide. Enviado:");
+        for (uint8_t i = 0; i < 8; i++) Serial.printf(" %02X", trama[i]);
+        Serial.print(" | Recibido:");
+        for (uint8_t i = 0; i < 8; i++) Serial.printf(" %02X", respuesta[i]);
+        Serial.println();
+        return false;
+    }
 
     // El eco por sí solo no distingue una respuesta real del módulo de un acoplamiento eléctrico
     // TX->RX (p. ej. módulo desconectado o mal cableado, donde el ESP32 termina "escuchando" su
     // propia transmisión): se confirma además con una lectura independiente del estado real de
     // las bobinas (función 0x01, trama distinta a la de escritura) antes de declarar éxito.
     bool canal0Encendido, canal1Encendido;
-    if (!leerEstado(canal0Encendido, canal1Encendido)) return false;
+    if (!leerEstado(canal0Encendido, canal1Encendido)) {
+        Serial.println("[MODBUS] escribirCanal: eco OK, pero leerEstado() (función 0x01) no respondió.");
+        return false;
+    }
     bool estadoConfirmado = (canal == 0) ? canal0Encendido : canal1Encendido;
+    if (estadoConfirmado != encender) {
+        Serial.printf("[MODBUS] escribirCanal: eco OK, pero leerEstado() dice canal0=%d canal1=%d (esperaba canal=%u encender=%d).\n",
+            canal0Encendido, canal1Encendido, canal, encender);
+    }
     return estadoConfirmado == encender;
 }
 
