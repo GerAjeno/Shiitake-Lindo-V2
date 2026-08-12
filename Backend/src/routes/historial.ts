@@ -24,7 +24,7 @@ historialRouter.get('/', async (req, res) => {
 
   if (rangoMs <= SEIS_HORAS_MS) {
     const { rows } = await pool.query(
-      `SELECT ts, humedad, temperatura, rele_encendido AS "releEncendido"
+      `SELECT ts, humedad, temperatura, rele_encendido AS "releEncendido", co2
        FROM historial WHERE zona = $1 AND ts BETWEEN $2 AND $3 ORDER BY ts ASC`,
       [zona, desde, hasta]
     );
@@ -34,7 +34,8 @@ historialRouter.get('/', async (req, res) => {
   if (rangoMs <= SIETE_DIAS_MS) {
     const { rows } = await pool.query(
       `SELECT bucket AS ts, humedad_avg AS humedad, temperatura_avg AS temperatura,
-              humedad_min, humedad_max, temperatura_min, temperatura_max, rele_pct_encendido
+              humedad_min, humedad_max, temperatura_min, temperatura_max, rele_pct_encendido,
+              co2_avg AS co2, co2_min, co2_max
        FROM historial_agregado_5min WHERE zona = $1 AND bucket BETWEEN $2 AND $3 ORDER BY bucket ASC`,
       [zona, desde, hasta]
     );
@@ -45,7 +46,8 @@ historialRouter.get('/', async (req, res) => {
     `SELECT date_trunc('hour', bucket) AS ts,
             avg(humedad_avg) AS humedad, min(humedad_min) AS humedad_min, max(humedad_max) AS humedad_max,
             avg(temperatura_avg) AS temperatura, min(temperatura_min) AS temperatura_min, max(temperatura_max) AS temperatura_max,
-            avg(rele_pct_encendido) AS rele_pct_encendido
+            avg(rele_pct_encendido) AS rele_pct_encendido,
+            avg(co2_avg) AS co2, min(co2_min) AS co2_min, max(co2_max) AS co2_max
      FROM historial_agregado_5min WHERE zona = $1 AND bucket BETWEEN $2 AND $3
      GROUP BY 1 ORDER BY 1 ASC`,
     [zona, desde, hasta]

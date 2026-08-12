@@ -159,6 +159,7 @@ export interface MuestraCruda {
   humedad: number;
   temperatura: number;
   releEncendido: boolean;
+  co2?: number; // valor crudo del MQ135 de la zona (ADC); opcional por compatibilidad con firmware previo a este campo
 }
 
 /** Lote de hasta 6 muestras de 5s (30s totales) por zona, enviado cada 30s. */

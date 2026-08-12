@@ -12,20 +12,23 @@ const RETENCION_CRUDO_DIAS = 90;
 async function agregarUltimoBucket() {
   await pool.query(`
     INSERT INTO historial_agregado_5min (zona, bucket, humedad_min, humedad_max, humedad_avg,
-                                          temperatura_min, temperatura_max, temperatura_avg, rele_pct_encendido)
+                                          temperatura_min, temperatura_max, temperatura_avg, rele_pct_encendido,
+                                          co2_min, co2_max, co2_avg)
     SELECT
       zona,
       date_trunc('hour', ts) + (floor(date_part('minute', ts) / 5) * interval '5 minute') AS bucket,
       min(humedad), max(humedad), avg(humedad),
       min(temperatura), max(temperatura), avg(temperatura),
-      avg(CASE WHEN rele_encendido THEN 100.0 ELSE 0.0 END)
+      avg(CASE WHEN rele_encendido THEN 100.0 ELSE 0.0 END),
+      min(co2), max(co2), avg(co2)
     FROM historial
     WHERE ts >= now() - interval '15 minutes' AND ts < date_trunc('minute', now()) - interval '5 minutes'
     GROUP BY zona, bucket
     ON CONFLICT (zona, bucket) DO UPDATE SET
       humedad_min = EXCLUDED.humedad_min, humedad_max = EXCLUDED.humedad_max, humedad_avg = EXCLUDED.humedad_avg,
       temperatura_min = EXCLUDED.temperatura_min, temperatura_max = EXCLUDED.temperatura_max, temperatura_avg = EXCLUDED.temperatura_avg,
-      rele_pct_encendido = EXCLUDED.rele_pct_encendido;
+      rele_pct_encendido = EXCLUDED.rele_pct_encendido,
+      co2_min = EXCLUDED.co2_min, co2_max = EXCLUDED.co2_max, co2_avg = EXCLUDED.co2_avg;
   `);
 }
 

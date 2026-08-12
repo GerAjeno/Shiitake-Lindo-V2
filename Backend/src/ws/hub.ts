@@ -129,17 +129,17 @@ async function manejarMensajeDispositivo(dispositivoId: string, raw: string) {
       for (const lote of mensaje.datos) {
         for (const m of lote.muestras) {
           await pool.query(
-            `INSERT INTO historial_crudo (zona, humedad, temperatura, rele_encendido, ts) VALUES ($1,$2,$3,$4,$5)`,
-            [lote.zona, m.humedad, m.temperatura, m.releEncendido, m.ts]
+            `INSERT INTO historial_crudo (zona, humedad, temperatura, rele_encendido, co2, ts) VALUES ($1,$2,$3,$4,$5,$6)`,
+            [lote.zona, m.humedad, m.temperatura, m.releEncendido, m.co2 ?? null, m.ts]
           );
         }
         // Decisión explícita del usuario: la serie de 30s usa la ÚLTIMA muestra del lote, no un promedio.
         const ultima = lote.muestras[lote.muestras.length - 1];
         if (ultima) {
           await pool.query(
-            `INSERT INTO historial (zona, humedad, temperatura, rele_encendido, ts)
-             VALUES ($1,$2,$3,$4,$5)`,
-            [lote.zona, ultima.humedad, ultima.temperatura, ultima.releEncendido, ultima.ts]
+            `INSERT INTO historial (zona, humedad, temperatura, rele_encendido, co2, ts)
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [lote.zona, ultima.humedad, ultima.temperatura, ultima.releEncendido, ultima.co2 ?? null, ultima.ts]
           );
         }
       }

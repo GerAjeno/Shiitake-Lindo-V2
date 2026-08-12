@@ -17,9 +17,11 @@ export interface PuntoHistorico {
   humedadAtriles: number | null;
   tempAtriles: number | null;
   releAtriles: number | null;
+  co2Atriles: number | null;
   humedadDescanso: number | null;
   tempDescanso: number | null;
   releDescanso: number | null;
+  co2Descanso: number | null;
 }
 
 export interface EstadisticasZona {
@@ -29,6 +31,7 @@ export interface EstadisticasZona {
   tempPromedio: number;
   tempMin: number;
   tempMax: number;
+  co2Promedio: number;
   minutosHumidificadorON: number;
   porcentajeHumidificadorON: number;
 }
@@ -42,7 +45,7 @@ export interface EstadisticasHistorial {
 
 const ESTADISTICAS_VACIAS_ZONA: EstadisticasZona = {
   humedadPromedio: 0, humedadMin: 0, humedadMax: 0,
-  tempPromedio: 0, tempMin: 0, tempMax: 0,
+  tempPromedio: 0, tempMin: 0, tempMax: 0, co2Promedio: 0,
   minutosHumidificadorON: 0, porcentajeHumidificadorON: 0,
 };
 
@@ -62,12 +65,13 @@ function inicioMillisPorRango(rango: FiltroRangoTiempo, ahora: number): number {
   }
 }
 
-function calcularStats(puntos: PuntoHistorico[], campoHum: "humedadAtriles" | "humedadDescanso", campoTemp: "tempAtriles" | "tempDescanso", campoRele: "releAtriles" | "releDescanso", rangoMs: number): EstadisticasZona {
+function calcularStats(puntos: PuntoHistorico[], campoHum: "humedadAtriles" | "humedadDescanso", campoTemp: "tempAtriles" | "tempDescanso", campoRele: "releAtriles" | "releDescanso", campoCo2: "co2Atriles" | "co2Descanso", rangoMs: number): EstadisticasZona {
   const validos = puntos.filter((p) => p[campoHum] !== null);
   if (validos.length === 0) return ESTADISTICAS_VACIAS_ZONA;
 
   const humedades = validos.map((p) => p[campoHum] as number);
   const temps = validos.map((p) => p[campoTemp] as number);
+  const co2s = puntos.filter((p) => p[campoCo2] !== null).map((p) => p[campoCo2] as number);
   let millisOn = 0;
   for (let i = 0; i < puntos.length - 1; i++) {
     const delta = puntos[i + 1].timestamp - puntos[i].timestamp;
@@ -81,6 +85,7 @@ function calcularStats(puntos: PuntoHistorico[], campoHum: "humedadAtriles" | "h
     tempPromedio: Number((temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)),
     tempMin: Number(Math.min(...temps).toFixed(1)),
     tempMax: Number(Math.max(...temps).toFixed(1)),
+    co2Promedio: co2s.length > 0 ? Number((co2s.reduce((a, b) => a + b, 0) / co2s.length).toFixed(0)) : 0,
     minutosHumidificadorON: Math.round(millisOn / 60000),
     porcentajeHumidificadorON: Math.min(Math.round((millisOn / Math.max(rangoMs, 1)) * 100), 100),
   };
@@ -111,7 +116,7 @@ export function useHistoricalData(rango: FiltroRangoTiempo, inicioCustom?: numbe
         const porTs = new Map<number, PuntoHistorico>();
         const upsert = (ts: number) => {
           if (!porTs.has(ts)) {
-            porTs.set(ts, { timestamp: ts, humedadAtriles: null, tempAtriles: null, releAtriles: null, humedadDescanso: null, tempDescanso: null, releDescanso: null });
+            porTs.set(ts, { timestamp: ts, humedadAtriles: null, tempAtriles: null, releAtriles: null, co2Atriles: null, humedadDescanso: null, tempDescanso: null, releDescanso: null, co2Descanso: null });
           }
           return porTs.get(ts)!;
         };
@@ -121,6 +126,7 @@ export function useHistoricalData(rango: FiltroRangoTiempo, inicioCustom?: numbe
           punto.humedadAtriles = p.humedad ?? null;
           punto.tempAtriles = p.temperatura ?? null;
           punto.releAtriles = p.releEncendido !== undefined ? (p.releEncendido ? 1 : 0) : null;
+          punto.co2Atriles = p.co2 ?? null;
         }
         for (const p of resDescanso.puntos) {
           const ts = new Date(p.ts).getTime();
@@ -128,6 +134,7 @@ export function useHistoricalData(rango: FiltroRangoTiempo, inicioCustom?: numbe
           punto.humedadDescanso = p.humedad ?? null;
           punto.tempDescanso = p.temperatura ?? null;
           punto.releDescanso = p.releEncendido !== undefined ? (p.releEncendido ? 1 : 0) : null;
+          punto.co2Descanso = p.co2 ?? null;
         }
 
         const ordenados = Array.from(porTs.values()).sort((a, b) => a.timestamp - b.timestamp);
@@ -137,8 +144,8 @@ export function useHistoricalData(rango: FiltroRangoTiempo, inicioCustom?: numbe
         setEstadisticas({
           totalRegistros: ordenados.length,
           rangoHorasTotal: Number((rangoMs / 3600000).toFixed(1)),
-          atriles: calcularStats(ordenados, "humedadAtriles", "tempAtriles", "releAtriles", rangoMs),
-          descanso: calcularStats(ordenados, "humedadDescanso", "tempDescanso", "releDescanso", rangoMs),
+          atriles: calcularStats(ordenados, "humedadAtriles", "tempAtriles", "releAtriles", "co2Atriles", rangoMs),
+          descanso: calcularStats(ordenados, "humedadDescanso", "tempDescanso", "releDescanso", "co2Descanso", rangoMs),
         });
       } catch (err) {
         console.error("Error consultando historial:", err);

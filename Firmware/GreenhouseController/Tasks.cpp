@@ -108,10 +108,12 @@ void tareaSensores(void* parametro) {
             JsonObject mAt = arrAt.add<JsonObject>();
             mAt["ts"] = ts; mAt["humedad"] = at.humedadPromedio; mAt["temperatura"] = at.temperaturaPromedio;
             mAt["releEncendido"] = g_humidificador.estadoAtriles();
+            mAt["co2"] = g_sensores.lecturaMQAtriles().valorCrudo;
 
             JsonObject mDe = arrDe.add<JsonObject>();
             mDe["ts"] = ts; mDe["humedad"] = de.humedadPromedio; mDe["temperatura"] = de.temperaturaPromedio;
             mDe["releEncendido"] = g_humidificador.estadoDescanso();
+            mDe["co2"] = g_sensores.lecturaMQDescanso().valorCrudo;
 
             contadorLote++;
             if (contadorLote >= Config::INTERVALO_LOTE_HISTORIAL_MUESTRAS) {
