@@ -205,9 +205,11 @@ void CloudClient::registrarAlerta(const char* id, const char* tipo, const String
 
 void CloudClient::registrarLog(const char* categoria, const char* nivel, const String& mensaje) {
     Serial.printf("[LOG %s/%s] %s\n", categoria, nivel, mensaje.c_str());
-    // Los logs detallados del dispositivo se ven por Serial; el registro formal de auditoría en
-    // Postgres lo genera el backend para acciones ORIGINADAS desde la web (ver Backend/src/ws/hub.ts).
-    // Enviar cada log de firmware como mensaje de red agregaría tráfico sin un consumidor hoy.
+    JsonDocument doc;
+    doc["tipo"] = "log_dispositivo";
+    JsonObject d = doc["datos"].to<JsonObject>();
+    d["categoria"] = categoria; d["nivel"] = nivel; d["mensaje"] = mensaje;
+    enviarJson(doc);
 }
 
 ComandoEntrante CloudClient::tomarComandoPendiente() {

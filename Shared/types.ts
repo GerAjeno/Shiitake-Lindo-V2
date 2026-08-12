@@ -168,10 +168,18 @@ export interface LoteHistorial {
   muestras: MuestraCruda[];
 }
 
+/** Evento de auditoría originado por el propio ESP32 (no por una acción de un usuario en la web). */
+export interface LogDispositivo {
+  categoria: string; // 'ACTUADOR' | 'SENSOR' | 'WIFI' | ...
+  nivel: string; // 'INFO' | 'ADVERTENCIA' | 'CRITICA'
+  mensaje: string;
+}
+
 export type MensajeClienteAServidor =
   | { tipo: 'telemetria'; datos: TelemetriaActual } // dispositivo -> servidor
   | { tipo: 'sensores'; datos: MatrizSensores }
   | { tipo: 'historial_lote'; datos: LoteHistorial[] } // dispositivo -> servidor, cada 30s
   | { tipo: 'alerta_dispositivo'; datos: { id: string; tipo: TipoAlerta; mensaje: string } } // dispositivo -> servidor
+  | { tipo: 'log_dispositivo'; datos: LogDispositivo } // dispositivo -> servidor
   | { tipo: 'ack'; datos: AckComando }
   | { tipo: 'comando'; datos: TipoComandoManual }; // navegador -> servidor

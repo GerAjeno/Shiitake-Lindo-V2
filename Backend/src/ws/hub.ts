@@ -158,6 +158,14 @@ async function manejarMensajeDispositivo(dispositivoId: string, raw: string) {
       });
       break;
     }
+    case 'log_dispositivo': {
+      const { categoria, nivel, mensaje: texto } = mensaje.datos;
+      await pool.query(
+        `INSERT INTO sistema_logs (categoria, nivel, mensaje) VALUES ($1, $2, $3)`,
+        [categoria, nivel, texto]
+      );
+      break;
+    }
     case 'ack': {
       const pendiente = comandosPendientes.get(mensaje.datos.orderId);
       if (pendiente) {

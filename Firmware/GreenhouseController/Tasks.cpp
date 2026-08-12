@@ -27,6 +27,19 @@ static const char* estadoATexto(EstadoSensor e) {
     }
 }
 
+/** Detecta transición OK<->caído de un sensor individual y lo registra en la auditoría (SENSOR). */
+static void notificarTransicionSensor(const LecturaDHT& lectura, const char* nombre, const char* zona, bool* anteriorOk) {
+    bool okAhora = lectura.estado == EstadoSensor::OK;
+    if (*anteriorOk && !okAhora) {
+        g_cloud.registrarLog("SENSOR", "ADVERTENCIA",
+            String("Sensor ") + nombre + " (" + zona + ") sin respuesta o lectura inválida tras " +
+            String(Config::LECTURAS_PARA_DECLARAR_FALLO) + " lecturas consecutivas. Se sigue operando con el sensor restante del área.");
+    } else if (!*anteriorOk && okAhora) {
+        g_cloud.registrarLog("SENSOR", "INFO", String("Sensor ") + nombre + " (" + zona + ") recuperado, vuelve a reportar lecturas válidas.");
+    }
+    *anteriorOk = okAhora;
+}
+
 static const char* modoATexto(ModoControl m) {
     switch (m) {
         case ModoControl::MANUAL: return "MANUAL";
@@ -84,6 +97,11 @@ void tareaSensores(void* parametro) {
     JsonArray arrDe = muestrasDescanso.to<JsonArray>();
     uint8_t contadorLote = 0;
 
+    // Estado previo de cada sensor/zona, para detectar transiciones y auditar solo el cambio
+    // (no cada lectura) — ver notificarTransicionSensor().
+    bool okAnteriorDht1 = true, okAnteriorDht2 = true, okAnteriorDht3 = true, okAnteriorDht4 = true;
+    bool falloCriticoAnteriorAtriles = false, falloCriticoAnteriorDescanso = false;
+
     for (;;) {
         g_sensores.leerTodos();
 
@@ -94,6 +112,22 @@ void tareaSensores(void* parametro) {
             ResultadoZonaDHT de = g_sensores.calcularDescanso();
             g_falloCriticoAtriles = at.falloCritico;
             g_falloCriticoDescanso = de.falloCritico;
+
+            notificarTransicionSensor(g_matrizSensores.dht1, "DHT1", "Atriles", &okAnteriorDht1);
+            notificarTransicionSensor(g_matrizSensores.dht2, "DHT2", "Atriles", &okAnteriorDht2);
+            notificarTransicionSensor(g_matrizSensores.dht3, "DHT3", "Descanso", &okAnteriorDht3);
+            notificarTransicionSensor(g_matrizSensores.dht4, "DHT4", "Descanso", &okAnteriorDht4);
+
+            if (!falloCriticoAnteriorAtriles && at.falloCritico) {
+                g_cloud.registrarLog("SENSOR", "CRITICA",
+                    "Fallo crítico: ambos sensores DHT de Atriles sin respuesta. El humidificador se apaga por seguridad.");
+            }
+            falloCriticoAnteriorAtriles = at.falloCritico;
+            if (!falloCriticoAnteriorDescanso && de.falloCritico) {
+                g_cloud.registrarLog("SENSOR", "CRITICA",
+                    "Fallo crítico: ambos sensores DHT de Descanso sin respuesta. El humidificador se apaga por seguridad.");
+            }
+            falloCriticoAnteriorDescanso = de.falloCritico;
 
             if (at.discrepanciaExcesiva) {
                 g_cloud.registrarAlerta("DISCREPANCIA_ATRILES", "ADVERTENCIA",
