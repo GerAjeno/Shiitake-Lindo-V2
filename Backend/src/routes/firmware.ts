@@ -13,6 +13,14 @@ const FIRMWARE_DIR = process.env.FIRMWARE_DIR ?? '/data/firmware';
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ?? 'https://prueba.ger-cloud.cc';
 const VERSIONES_A_CONSERVAR = 2;
 
+// Express no decodifica %2F antes de matchear la ruta, así que `req.params.version` puede llegar
+// con secuencias "../" después del decode — sin esta validación, `path.join(FIRMWARE_DIR, ...)`
+// permite path traversal (lectura arbitraria de archivos vía la descarga, que es pública/sin auth).
+const VERSION_VALIDA = /^[\w.-]+$/;
+function versionSegura(version: string): boolean {
+  return VERSION_VALIDA.test(version) && !version.includes('..');
+}
+
 fs.mkdirSync(FIRMWARE_DIR, { recursive: true });
 
 firmwareRouter.get('/', requireAuth, requireRole('admin'), async (_req, res) => {
@@ -25,6 +33,7 @@ firmwareRouter.get('/', requireAuth, requireRole('admin'), async (_req, res) => 
 // Descarga pública (sin auth): el ESP32 no tiene sesión de navegador. La integridad
 // la garantiza la verificación de SHA-256 + firma Ed25519 que hace el propio firmware.
 firmwareRouter.get('/:version/download', (req, res) => {
+  if (!versionSegura(req.params.version)) return res.status(400).json({ error: 'Versión inválida.' });
   const archivo = path.join(FIRMWARE_DIR, `${req.params.version}.bin`);
   if (!fs.existsSync(archivo)) return res.status(404).json({ error: 'Versión no encontrada.' });
   const { size } = fs.statSync(archivo);
@@ -44,6 +53,9 @@ firmwareRouter.post(
     const buffer = req.body as Buffer;
     if (!version || !Buffer.isBuffer(buffer) || buffer.length === 0) {
       return res.status(400).json({ error: 'Falta la versión (header x-firmware-version) o el binario está vacío.' });
+    }
+    if (!versionSegura(version)) {
+      return res.status(400).json({ error: 'La versión solo puede contener letras, números, puntos, guiones y guiones bajos.' });
     }
 
     const sha256 = calcularSha256(buffer);

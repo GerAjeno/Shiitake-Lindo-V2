@@ -16,6 +16,18 @@ import { usuariosRouter } from './routes/usuarios';
 import { firmwareRouter } from './routes/firmware';
 import { meRouter } from './routes/me';
 
+// Red de seguridad global: sin esto, CUALQUIER promesa rechazada sin capturar (un mensaje
+// malformado del ESP32, una query que falla por una condición de carrera, etc.) termina el
+// proceso completo por defecto desde Node 15+ — tumbando control de relés, WS y REST a la vez
+// por un solo mensaje. Se loguea y se sigue: es preferible degradar una operación puntual a
+// perder el control físico del invernadero.
+process.on('unhandledRejection', (err) => {
+  console.error('[SISTEMA] Promesa rechazada sin capturar (no se reinicia el proceso):', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[SISTEMA] Excepción no capturada (no se reinicia el proceso):', err);
+});
+
 async function main() {
   await ejecutarMigraciones();
   await asegurarAdminInicial();

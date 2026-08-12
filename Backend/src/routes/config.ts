@@ -19,6 +19,42 @@ function filaAZona(fila: any): ConfiguracionZona {
   };
 }
 
+const MODOS_VALIDOS = ['AUTO', 'MANUAL', 'TEMPORIZADO'];
+const HORA_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * Valida los valores YA FUSIONADOS (anterior + parcial recibido) antes de escribir — el endpoint
+ * acepta actualizaciones parciales (COALESCE), así que no basta con validar solo lo que llegó en
+ * el body, hay que validar el resultado final. Sin esto, la API aceptaba en silencio bandas de
+ * humedad invertidas, modos inexistentes o umbrales de MQ135 sin sentido, y ese estado inválido se
+ * reenviaba tal cual al ESP32 (que siempre gana en config, sin comparar versiones).
+ */
+function validarConfiguracionZona(c: ConfiguracionZona): string | null {
+  if (!MODOS_VALIDOS.includes(c.modo)) return `Modo inválido: "${c.modo}". Debe ser AUTO, MANUAL o TEMPORIZADO.`;
+  if (typeof c.humedadMinima !== 'number' || typeof c.humedadMaxima !== 'number' || Number.isNaN(c.humedadMinima) || Number.isNaN(c.humedadMaxima)) {
+    return 'Humedad mínima/máxima deben ser números.';
+  }
+  if (c.humedadMinima < 0 || c.humedadMinima > 100 || c.humedadMaxima < 0 || c.humedadMaxima > 100) {
+    return 'Humedad mínima/máxima deben estar entre 0 y 100.';
+  }
+  if (c.humedadMinima >= c.humedadMaxima) {
+    return `Humedad mínima (${c.humedadMinima}%) debe ser menor que la máxima (${c.humedadMaxima}%).`;
+  }
+  if (typeof c.umbralAdvertenciaMQ !== 'number' || typeof c.umbralAlarmaMQ !== 'number' || c.umbralAdvertenciaMQ < 0 || c.umbralAlarmaMQ < 0) {
+    return 'Los umbrales de MQ135 deben ser números no negativos.';
+  }
+  if (c.umbralAdvertenciaMQ > c.umbralAlarmaMQ) {
+    return 'El umbral de advertencia de MQ135 no puede ser mayor que el de alarma.';
+  }
+  if (!Array.isArray(c.rangosHorarios)) return 'rangosHorarios debe ser un arreglo.';
+  for (const r of c.rangosHorarios) {
+    if (!r || typeof r.id !== 'string' || typeof r.habilitado !== 'boolean' || !HORA_REGEX.test(r.inicio) || !HORA_REGEX.test(r.fin)) {
+      return 'Cada bloque horario debe tener id, habilitado (bool) e inicio/fin en formato HH:mm.';
+    }
+  }
+  return null;
+}
+
 export async function obtenerConfiguracionCompleta(): Promise<ConfiguracionSistema> {
   const { rows: zonas } = await pool.query('SELECT * FROM configuracion_zona');
   const { rows: sistema } = await pool.query('SELECT * FROM configuracion_sistema WHERE id = true');
@@ -46,8 +82,13 @@ configRouter.put('/:zona', requireRole('admin', 'operador'), async (req, res) =>
 
   const { rows: previas } = await pool.query('SELECT * FROM configuracion_zona WHERE zona = $1', [zona]);
   const anterior = previas[0] ? filaAZona(previas[0]) : null;
+  if (!anterior) return res.status(404).json({ error: 'Zona no encontrada.' });
 
   const c: Partial<ConfiguracionZona> = req.body;
+  const fusionada: ConfiguracionZona = { ...anterior, ...c };
+  const errorValidacion = validarConfiguracionZona(fusionada);
+  if (errorValidacion) return res.status(400).json({ error: errorValidacion });
+
   await pool.query(
     `UPDATE configuracion_zona SET
        humedad_minima = COALESCE($2, humedad_minima),

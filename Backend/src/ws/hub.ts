@@ -96,6 +96,16 @@ async function manejarMensajeDispositivo(dispositivoId: string, raw: string) {
     return;
   }
 
+  try {
+    await procesarMensajeDispositivo(dispositivoId, mensaje);
+  } catch (err) {
+    // Un mensaje puntual mal formado (o una query que falla) no debe tumbar la conexión del
+    // dispositivo ni el proceso — se descarta ese mensaje y se sigue procesando los siguientes.
+    console.error(`[WS] Error procesando mensaje '${mensaje.tipo}' del dispositivo ${dispositivoId}:`, err);
+  }
+}
+
+async function procesarMensajeDispositivo(dispositivoId: string, mensaje: MensajeClienteAServidor) {
   switch (mensaje.tipo) {
     case 'telemetria': {
       const t = mensaje.datos;
@@ -237,17 +247,30 @@ export function iniciarWebSocketHub(server: http.Server) {
           }
           if (mensaje.tipo !== 'comando') return;
 
+          // `TipoComandoManual` es solo un tipo de TypeScript — se borra en runtime. Sin esta
+          // validación, un payload arbitrario del navegador se relaya tal cual al ESP32 (que
+          // confía en lo que le manda el servidor).
+          const c = mensaje.datos as unknown as { tipo?: unknown; zona?: unknown; encender?: unknown };
+          // Id generado por el navegador para correlacionar la respuesta con el comando que la
+          // originó (puede haber más de uno en vuelo: cada tarjeta de zona tiene su propio botón).
+          const clienteOrderId = typeof mensaje.clienteOrderId === 'string' ? mensaje.clienteOrderId : '';
+
+          if (c?.tipo !== 'humidificador' || (c.zona !== 'atriles' && c.zona !== 'descanso') || typeof c.encender !== 'boolean') {
+            enviarANavegador(cliente, { tipo: 'ack', datos: { orderId: clienteOrderId, ejecutado: false, error: 'Comando inválido.' } });
+            return;
+          }
+
           if (usuario.rol === 'lectura') {
             enviarANavegador(cliente, {
               tipo: 'ack',
-              datos: { orderId: '', ejecutado: false, error: 'Tu rol es solo lectura.' },
+              datos: { orderId: clienteOrderId, ejecutado: false, error: 'Tu rol es solo lectura.' },
             });
             return;
           }
           const resultado = await enviarComandoADispositivo(mensaje.datos);
           enviarANavegador(cliente, {
             tipo: 'ack',
-            datos: { orderId: '', ejecutado: resultado.ejecutado, error: resultado.error },
+            datos: { orderId: clienteOrderId, ejecutado: resultado.ejecutado, error: resultado.error },
           });
           await pool.query(
             `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email, usuario_ip, valor_nuevo)

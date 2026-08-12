@@ -182,4 +182,8 @@ export type MensajeClienteAServidor =
   | { tipo: 'alerta_dispositivo'; datos: { id: string; tipo: TipoAlerta; mensaje: string } } // dispositivo -> servidor
   | { tipo: 'log_dispositivo'; datos: LogDispositivo } // dispositivo -> servidor
   | { tipo: 'ack'; datos: AckComando }
-  | { tipo: 'comando'; datos: TipoComandoManual }; // navegador -> servidor
+  // navegador -> servidor. `clienteOrderId` es un id generado por el navegador (no confundir con
+  // el orderId que el backend genera para el par ComandoManual<->AckComando con el dispositivo)
+  // para poder correlacionar la respuesta cuando hay más de un comando en vuelo a la vez (ej. las
+  // 2 tarjetas de zona del dashboard, cada una con su propio botón).
+  | { tipo: 'comando'; datos: TipoComandoManual; clienteOrderId: string };
