@@ -1,0 +1,31 @@
+# Sin este archivo, `docker compose build` (context: raíz del repo, ver Backend/Dockerfile y
+# Frontend/Dockerfile) podía meter un .env local (con JWT_SECRET, DATABASE_URL, etc. si alguien
+# probó `npm run dev` en el mismo checkout antes de desplegar) en la caché de capas de Docker del
+# host, aunque nunca llegue a la imagen final (que solo copia dist/.next).
+node_modules/
+.next/
+out/
+build/
+dist/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.env
+.env.*
+!.env.example
+
+.git/
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+**/serviceAccountKey*.json
+**/firebase-service-account*.json
+**/ota-signing-key*
+**/*.pem
+**/*.key
+infra/secrets/
+
+*.tsbuildinfo
+Backend/src/shared/

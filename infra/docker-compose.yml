@@ -1,5 +1,17 @@
+# Sin esto, el driver de logs por defecto de Docker (json-file) no rota ni limita tamaño — la
+# contraseña admin autogenerada que el backend imprime una sola vez al arrancar (ver
+# auth/bootstrap.ts) quedaría legible en `docker compose logs` indefinidamente, meses después de
+# que ya se cambió.
+x-logging: &logging-por-defecto
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
   postgres:
+    <<: *logging-por-defecto
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -20,6 +32,7 @@ services:
       retries: 10
 
   backend:
+    <<: *logging-por-defecto
     build:
       context: ..
       dockerfile: Backend/Dockerfile
@@ -36,10 +49,15 @@ services:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
       PORT: 3001
     volumes:
-      - ./secrets:/run/secrets:ro
+      # Solo el archivo que el backend realmente necesita — NO toda la carpeta ./secrets/, que
+      # también puede contener el service account de Firebase (uso único, ver
+      # scripts/migrar-datos-firebase.js) u otros archivos administrativos que no deberían quedar
+      # accesibles a este contenedor de larga duración.
+      - ./secrets/ota-signing-key.pem:/run/secrets/ota-signing-key.pem:ro
       - firmware_data:/data/firmware
 
   frontend:
+    <<: *logging-por-defecto
     build:
       context: ..
       dockerfile: Frontend/Dockerfile
@@ -48,6 +66,7 @@ services:
       - backend
 
   caddy:
+    <<: *logging-por-defecto
     image: caddy:2-alpine
     restart: unless-stopped
     volumes:
@@ -58,6 +77,7 @@ services:
       - frontend
 
   cloudflared:
+    <<: *logging-por-defecto
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel run

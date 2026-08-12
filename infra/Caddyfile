@@ -2,6 +2,16 @@
 # hacia el navegador, así que Caddy NO debe intentar emitir su propio certificado ACME
 # (no hay puerto 80/443 expuesto a internet directamente, solo alcanzable vía el túnel).
 :80 {
+	# Cloudflare Tunnel es la única capa de transporte hacia el navegador — Caddy es la única capa
+	# de la app que puede agregar estos headers (Cloudflare no los inyecta), y antes no había
+	# ninguno: la cookie de sesión quedaba sin protección de clickjacking/MIME-sniffing.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
 	# WebSocket y REST van al backend; todo lo demás (la web) al frontend Next.js.
 	@backend path /api/* /ws
 	reverse_proxy @backend backend:3001

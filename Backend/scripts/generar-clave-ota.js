@@ -16,9 +16,11 @@ const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
 const secretsDir = path.join(__dirname, '..', '..', 'infra', 'secrets');
 fs.mkdirSync(secretsDir, { recursive: true });
 
+// mode: 0o600 directo en writeFileSync (no un chmodSync después) — evita la ventana donde el
+// archivo existe brevemente con el umask por defecto del sistema (típicamente 644) antes de
+// restringirse.
 const privPath = path.join(secretsDir, 'ota-signing-key.pem');
-fs.writeFileSync(privPath, privateKey.export({ type: 'pkcs8', format: 'pem' }));
-fs.chmodSync(privPath, 0o600);
+fs.writeFileSync(privPath, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
 
 // Extraer los 32 bytes crudos de la llave pública Ed25519 (el DER de SPKI para
 // Ed25519 tiene los últimos 32 bytes como la llave "raw").
