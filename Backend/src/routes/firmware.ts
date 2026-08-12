@@ -10,7 +10,7 @@ import { enviarOtaADispositivo } from '../ws/hub';
 export const firmwareRouter = Router();
 
 const FIRMWARE_DIR = process.env.FIRMWARE_DIR ?? '/data/firmware';
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ?? 'https://prueba.ger-cloud.cc';
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ?? 'https://shiitake.ger-cloud.cc';
 const VERSIONES_A_CONSERVAR = 2;
 
 // Express no decodifica %2F antes de matchear la ruta, así que `req.params.version` puede llegar

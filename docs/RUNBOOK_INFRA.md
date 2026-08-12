@@ -20,7 +20,7 @@ docker compose version          # viene incluido en versiones recientes de Docke
 1. En [Cloudflare Zero Trust](https://one.dash.cloudflare.com/) → **Networks → Tunnels → Create a tunnel** (tipo *Cloudflared*).
 2. Nombrarlo `shiitake-lindo-v2`, copiar el **token** que entrega (va en `CLOUDFLARE_TUNNEL_TOKEN` del `.env`).
 3. En la misma pantalla, agregar un **Public Hostname**:
-   - Subdomain: `prueba` (dominio `ger-cloud.cc`, ya administrado en Cloudflare).
+   - Subdomain: `shiitake` (dominio `ger-cloud.cc`, ya administrado en Cloudflare).
    - Service: `HTTP` → `caddy:80` (el nombre del servicio Docker, **no** una IP — cloudflared corre en el mismo docker-compose y resuelve por nombre de servicio).
 4. No es necesario abrir ningún puerto en el firewall de la VM: todo el tráfico entra por el túnel saliente.
 
@@ -76,7 +76,7 @@ docker compose -f infra/docker-compose.yml --env-file infra/.env up -d --build
 docker compose -f infra/docker-compose.yml logs -f backend
 ```
 
-Verificar `https://prueba.ger-cloud.cc/api/health` → `{"ok":true}` antes de seguir con el resto de la migración.
+Verificar `https://shiitake.ger-cloud.cc/api/health` → `{"ok":true}` antes de seguir con el resto de la migración.
 
 ## 9. Migrar configuración e historial reciente desde el Firebase viejo
 

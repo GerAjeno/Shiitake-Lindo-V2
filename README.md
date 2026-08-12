@@ -10,7 +10,7 @@ El sistema gestiona dos zonas del cultivo de forma independiente:
 
 ## Estado actual
 
-🟡 **Marcha blanca** en [`prueba.ger-cloud.cc`](https://prueba.ger-cloud.cc). Tras una semana de validación se promueve a `shiitake.ger-cloud.cc` como dominio de producción.
+🟢 **Producción** en [`shiitake.ger-cloud.cc`](https://shiitake.ger-cloud.cc). Promovido tras la marcha blanca en `prueba.ger-cloud.cc`.
 
 ---
 
