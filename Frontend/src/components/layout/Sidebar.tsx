@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LineChart, Sliders, Bell, LogOut, FileText } from "lucide-react";
+import { LayoutDashboard, LineChart, Sliders, Bell, LogOut, FileText, Users } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ShiitakeLogo } from "@/components/icons/ShiitakeLogo";
 
@@ -25,6 +25,7 @@ export function Sidebar() {
     { nombre: "Registro Alertas", ruta: "/alerts", icono: Bell, nombreCorto: "Alertas" },
     ...(esAdmin ? [{ nombre: "Auditoría / Logs", ruta: "/logs", icono: FileText, nombreCorto: "Logs" }] : []),
     { nombre: "Configuración", ruta: "/settings", icono: Sliders, nombreCorto: "Config" },
+    ...(esAdmin ? [{ nombre: "Usuarios", ruta: "/usuarios", icono: Users, nombreCorto: "Usuarios" }] : []),
   ];
 
   return (

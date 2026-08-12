@@ -44,6 +44,11 @@ usuariosRouter.put('/:uid/rol', async (req, res) => {
   if (!['admin', 'operador', 'lectura'].includes(rol)) {
     return res.status(400).json({ error: 'Rol inválido.' });
   }
+  // Un admin no puede cambiarse su propio rol — evita quedar bloqueado por accidente sin
+  // ningún otro admin que pueda revertirlo.
+  if (req.params.uid === req.usuario!.uid) {
+    return res.status(400).json({ error: 'No podés cambiar tu propio rol.' });
+  }
   await pool.query('UPDATE usuarios SET rol = $1 WHERE uid = $2', [rol, req.params.uid]);
   await pool.query(
     `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email) VALUES ('USUARIOS', 'INFO', $1, $2)`,
@@ -54,6 +59,9 @@ usuariosRouter.put('/:uid/rol', async (req, res) => {
 
 usuariosRouter.put('/:uid/activo', async (req, res) => {
   const { activo } = req.body as { activo: boolean };
+  if (req.params.uid === req.usuario!.uid) {
+    return res.status(400).json({ error: 'No podés suspender tu propia cuenta.' });
+  }
   await pool.query('UPDATE usuarios SET activo = $1 WHERE uid = $2', [activo, req.params.uid]);
   await pool.query(
     `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email) VALUES ('USUARIOS', 'INFO', $1, $2)`,

@@ -18,6 +18,7 @@ import { useRealtimeData } from "@/hooks/useRealtimeData";
 import { apiFetch } from "@/lib/api";
 import { FirmwareManager } from "@/components/scada/FirmwareManager";
 import { TemporizadorConfig } from "@/components/settings/TemporizadorConfig";
+import { Switch } from "@/components/ui/Switch";
 import type { ConfiguracionZona, RangoHorario } from "@shared/types";
 
 interface VisualZona {
@@ -70,29 +71,6 @@ function PillModo({ activo, colorActivo, onClick, disabled, children }: { activo
       }`}
     >
       {children}
-    </button>
-  );
-}
-
-/** Switch clásico (track + perilla deslizante) — usado para el override manual, que aplica al
- * toque en vez de esperar al botón "Guardar" general de la página. */
-function InterruptorSwitch({ activo, disabled, cargando, onClick }: { activo: boolean; disabled: boolean; cargando: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={activo}
-      disabled={disabled || cargando}
-      onClick={onClick}
-      className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${
-        activo ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-700"
-      }`}
-    >
-      <span
-        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
-          activo ? "translate-x-8" : "translate-x-1"
-        } ${cargando ? "animate-pulse" : ""}`}
-      />
     </button>
   );
 }
@@ -177,7 +155,7 @@ function TarjetaZona({ v, local, soloLectura, onCambiar, onOverrideInmediato }: 
                 {aplicandoOverride ? "Aplicando..." : local.humidificadorManual ? "ENCENDIDO" : "APAGADO"}
               </span>
             </div>
-            <InterruptorSwitch activo={local.humidificadorManual} disabled={soloLectura} cargando={aplicandoOverride} onClick={manejarOverride} />
+            <Switch activo={local.humidificadorManual} disabled={soloLectura} cargando={aplicandoOverride} onClick={manejarOverride} />
           </div>
           {errorOverride && (
             <div className="flex items-center gap-1.5 text-[11px] font-mono text-rose-600 dark:text-rose-400">
