@@ -33,7 +33,8 @@ public:
     static void revertirPorFallo(const char* motivo);
 
 private:
-    static bool verificarYFlashear(uint8_t* buffer, size_t tamano, const String& sha256Esperado, const String& firmaBase64);
+    static bool verificarYFlashear(uint8_t* buffer, size_t tamano, const String& sha256Esperado, const String& firmaBase64,
+                                    String& motivoFalla);
     static void controlarLed(uint8_t r, uint8_t g, uint8_t b);
     static bool _enActualizacion;
 };

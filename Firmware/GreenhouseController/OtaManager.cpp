@@ -32,7 +32,8 @@ String bytesAHex(const uint8_t* datos, size_t longitud) {
 
 } // namespace
 
-bool OtaManager::verificarYFlashear(uint8_t* buffer, size_t tamano, const String& sha256Esperado, const String& firmaBase64) {
+bool OtaManager::verificarYFlashear(uint8_t* buffer, size_t tamano, const String& sha256Esperado, const String& firmaBase64,
+                                     String& motivoFalla) {
     // 1) Verificar SHA-256
     uint8_t digest[32];
 #if MBEDTLS_VERSION_NUMBER >= 0x03000000
@@ -43,6 +44,7 @@ bool OtaManager::verificarYFlashear(uint8_t* buffer, size_t tamano, const String
     String sha256Calculado = bytesAHex(digest, 32);
     if (!sha256Calculado.equalsIgnoreCase(sha256Esperado)) {
         Serial.printf("[OTA ERROR] SHA-256 no coincide. Esperado=%s Calculado=%s\n", sha256Esperado.c_str(), sha256Calculado.c_str());
+        motivoFalla = "SHA-256 no coincide (esperado " + sha256Esperado + ", calculado " + sha256Calculado + ")";
         return false;
     }
 
@@ -53,11 +55,13 @@ bool OtaManager::verificarYFlashear(uint8_t* buffer, size_t tamano, const String
                                     (const unsigned char*)firmaBase64.c_str(), firmaBase64.length());
     if (rc != 0 || longitudDecodificada != 64) {
         Serial.println("[OTA ERROR] Firma Ed25519 con formato inválido.");
+        motivoFalla = "Firma Ed25519 con formato inválido";
         return false;
     }
     bool firmaValida = Ed25519::verify(firma, Config::OTA_PUBLIC_KEY_ED25519, buffer, tamano);
     if (!firmaValida) {
         Serial.println("[OTA ERROR] Firma Ed25519 inválida — el binario NO proviene del servidor confiable. Se rechaza.");
+        motivoFalla = "Firma Ed25519 inválida — el binario no proviene del servidor confiable";
         return false;
     }
     Serial.println("[OTA] SHA-256 y firma Ed25519 verificados correctamente. Procediendo a flashear...");
@@ -67,24 +71,29 @@ bool OtaManager::verificarYFlashear(uint8_t* buffer, size_t tamano, const String
     const esp_partition_t* destino = esp_ota_get_next_update_partition(NULL);
     if (!destino) {
         Serial.println("[OTA ERROR] No se encontró partición OTA de destino.");
+        motivoFalla = "No se encontró partición OTA de destino";
         return false;
     }
     esp_ota_handle_t handle;
     if (esp_ota_begin(destino, tamano, &handle) != ESP_OK) {
         Serial.println("[OTA ERROR] esp_ota_begin falló (¿tamaño excede la partición?).");
+        motivoFalla = "esp_ota_begin falló (¿tamaño excede la partición?)";
         return false;
     }
     if (esp_ota_write(handle, buffer, tamano) != ESP_OK) {
         Serial.println("[OTA ERROR] esp_ota_write falló.");
         esp_ota_abort(handle);
+        motivoFalla = "esp_ota_write falló";
         return false;
     }
     if (esp_ota_end(handle) != ESP_OK) {
         Serial.println("[OTA ERROR] esp_ota_end falló (imagen inválida).");
+        motivoFalla = "esp_ota_end falló (imagen inválida)";
         return false;
     }
     if (esp_ota_set_boot_partition(destino) != ESP_OK) {
         Serial.println("[OTA ERROR] No se pudo fijar la partición de arranque.");
+        motivoFalla = "No se pudo fijar la partición de arranque";
         return false;
     }
     return true;
@@ -106,6 +115,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     http.setTimeout(20000);
     if (!http.begin(clienteSeguro, ota.url)) {
         Serial.println("[OTA ERROR] No se pudo iniciar la conexión HTTPS.");
+        if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga abortada: no se pudo iniciar la conexión HTTPS con " + ota.url);
         controlarLed(255, 0, 0);
         _enActualizacion = false;
         return;
@@ -114,6 +124,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     int codigo = http.GET();
     if (codigo != HTTP_CODE_OK) {
         Serial.printf("[OTA ERROR] HTTP %d\n", codigo);
+        if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga abortada: el servidor respondió HTTP " + String(codigo));
         http.end();
         controlarLed(255, 0, 0);
         _enActualizacion = false;
@@ -126,6 +137,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     // tras gastar tiempo/ancho de banda descargando el binario completo a PSRAM.
     if (tamano <= 0 || tamano > 3 * 1024 * 1024) {
         Serial.println("[OTA ERROR] Tamaño de firmware inválido (excede el tamaño de partición de 3MB).");
+        if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga abortada: tamaño de firmware inválido (" + String(tamano) + " bytes).");
         http.end();
         controlarLed(255, 0, 0);
         _enActualizacion = false;
@@ -135,6 +147,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     uint8_t* buffer = (uint8_t*)heap_caps_malloc(tamano, MALLOC_CAP_SPIRAM);
     if (!buffer) {
         Serial.println("[OTA ERROR] Sin memoria PSRAM suficiente para el buffer de descarga.");
+        if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga abortada: sin memoria PSRAM suficiente para " + String(tamano) + " bytes.");
         http.end();
         controlarLed(255, 0, 0);
         _enActualizacion = false;
@@ -157,18 +170,20 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
 
     if (leidos != (size_t)tamano) {
         Serial.println("[OTA ERROR] Descarga incompleta (timeout).");
+        if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga incompleta por timeout: " + String(leidos) + "/" + String(tamano) + " bytes.");
         free(buffer);
         controlarLed(255, 0, 0);
         _enActualizacion = false;
         return;
     }
 
-    bool ok = verificarYFlashear(buffer, tamano, ota.sha256, ota.firmaBase64);
+    String motivoFalla;
+    bool ok = verificarYFlashear(buffer, tamano, ota.sha256, ota.firmaBase64, motivoFalla);
     free(buffer);
 
     if (!ok) {
         controlarLed(255, 0, 0);
-        if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Actualización rechazada: verificación de integridad/firma falló.");
+        if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Actualización rechazada: " + motivoFalla);
         _enActualizacion = false;
         return;
     }
