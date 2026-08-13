@@ -42,6 +42,44 @@ static void notificarTransicionSensor(const LecturaDHT& lectura, const char* nom
     *anteriorOk = okAhora;
 }
 
+/**
+ * Detecta cruces de los umbrales de calidad de aire (configurables por zona, ver
+ * ConfiguracionZona::umbralAdvertenciaMQ/umbralAlarmaMQ) y los publica como alertas — antes estos
+ * umbrales se guardaban y sincronizaban pero nunca se comparaban contra la lectura real del
+ * MQ135 en ningún lugar del firmware. Se alerta solo en el cruce (no cada 5s mientras siga mal)
+ * para no reabrir una alerta que el operador ya marcó como resuelta mientras la condición persiste.
+ */
+static void evaluarUmbralAire(const LecturaMQ& lectura, int umbralAdvertencia, int umbralAlarma, const char* zona,
+                               const char* idAdvertencia, const char* idAlarma,
+                               bool* superabaAdvertencia, bool* superabaAlarma) {
+    // Si el sensor está deshabilitado/caído, obtenerLectura() puede devolver el último valorCrudo
+    // conocido sin actualizarlo (Mq135Sensor no lo resetea a 0) — evaluar ese valor stale podría
+    // disparar una alerta falsa que ya no refleja el aire real.
+    if (lectura.estado != EstadoSensor::OK) return;
+
+    int valorCrudo = lectura.valorCrudo;
+    bool superaAdvertencia = valorCrudo >= umbralAdvertencia;
+    bool superaAlarma = valorCrudo >= umbralAlarma;
+
+    if (superaAdvertencia && !*superabaAdvertencia) {
+        g_cloud.registrarAlerta(idAdvertencia, "ADVERTENCIA",
+            String("Calidad de aire baja en ") + zona + " — lectura MQ135: " + String(valorCrudo) +
+            " (umbral de advertencia: " + String(umbralAdvertencia) + ").");
+    }
+    if (superaAlarma && !*superabaAlarma) {
+        g_cloud.registrarAlerta(idAlarma, "CRITICA",
+            String("Calidad de aire crítica en ") + zona + " — lectura MQ135: " + String(valorCrudo) +
+            " (umbral de alarma: " + String(umbralAlarma) + ").");
+    }
+    if (!superaAdvertencia && *superabaAdvertencia) {
+        g_cloud.registrarLog("SENSOR", "INFO",
+            String("Calidad de aire en ") + zona + " volvió a rango normal — lectura MQ135: " + String(valorCrudo) + ".");
+    }
+
+    *superabaAdvertencia = superaAdvertencia;
+    *superabaAlarma = superaAlarma;
+}
+
 static const char* modoATexto(ModoControl m) {
     switch (m) {
         case ModoControl::MANUAL: return "MANUAL";
@@ -116,6 +154,8 @@ void tareaSensores(void* parametro) {
     // (no cada lectura) — ver notificarTransicionSensor().
     bool okAnteriorDht1 = true, okAnteriorDht2 = true, okAnteriorDht3 = true, okAnteriorDht4 = true;
     bool falloCriticoAnteriorAtriles = false, falloCriticoAnteriorDescanso = false;
+    bool superabaAdvertenciaAireAtriles = false, superabaAlarmaAireAtriles = false;
+    bool superabaAdvertenciaAireDescanso = false, superabaAlarmaAireDescanso = false;
 
     for (;;) {
         g_sensores.leerTodos();
@@ -152,6 +192,13 @@ void tareaSensores(void* parametro) {
                 g_cloud.registrarAlerta("DISCREPANCIA_DESCANSO", "ADVERTENCIA",
                     "DHT3 y DHT4 de Descanso difieren más de lo permitido — revisar sensores.");
             }
+
+            evaluarUmbralAire(g_sensores.lecturaMQAtriles(), g_config.atriles.umbralAdvertenciaMQ,
+                g_config.atriles.umbralAlarmaMQ, "Atriles", "AIRE_ATRILES_ADVERTENCIA", "AIRE_ATRILES_ALARMA",
+                &superabaAdvertenciaAireAtriles, &superabaAlarmaAireAtriles);
+            evaluarUmbralAire(g_sensores.lecturaMQDescanso(), g_config.descanso.umbralAdvertenciaMQ,
+                g_config.descanso.umbralAlarmaMQ, "Descanso", "AIRE_DESCANSO_ADVERTENCIA", "AIRE_DESCANSO_ALARMA",
+                &superabaAdvertenciaAireDescanso, &superabaAlarmaAireDescanso);
 
             String ts = timestampIso();
             JsonObject mAt = arrAt.add<JsonObject>();
