@@ -6,10 +6,12 @@ export const alertasRouter = Router();
 
 alertasRouter.get('/', async (req, res) => {
   const soloNoResueltas = req.query.resuelta === 'false';
+  // `ts` se alía a "timestamp" porque el tipo compartido Alerta (Shared/types.ts) espera ese
+  // nombre — con SELECT * el campo llegaba como `ts` y el frontend mostraba "Invalid Date".
   const { rows } = await pool.query(
     soloNoResueltas
-      ? 'SELECT * FROM alertas WHERE resuelta = false ORDER BY ts DESC LIMIT 500'
-      : 'SELECT * FROM alertas ORDER BY ts DESC LIMIT 500'
+      ? 'SELECT id, tipo, categoria, mensaje, resuelta, ts AS timestamp FROM alertas WHERE resuelta = false ORDER BY ts DESC LIMIT 500'
+      : 'SELECT id, tipo, categoria, mensaje, resuelta, ts AS timestamp FROM alertas ORDER BY ts DESC LIMIT 500'
   );
   res.json(rows);
 });
