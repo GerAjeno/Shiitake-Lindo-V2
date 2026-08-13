@@ -1,5 +1,6 @@
 #include "OtaManager.h"
 #include "Config.h"
+#include "Tasks.h" // extern g_telemetria/g_mutexEstado — Tasks.h no incluye OtaManager.h, no hay ciclo
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <mbedtls/sha256.h>
@@ -28,6 +29,20 @@ String bytesAHex(const uint8_t* datos, size_t longitud) {
         salida += alfabeto[datos[i] & 0x0F];
     }
     return salida;
+}
+
+// procesarActualizacion() corre en tareaRed de forma síncrona/bloqueante durante todo el proceso
+// (hasta ~60s) — el resto de esa tarea (que es la única que manda telemetría) no vuelve a correr
+// hasta que termina, así que sin esto la web no ve ningún cambio hasta el reinicio. Reporta el
+// progreso empujando la telemetría de inmediato en vez de esperar al próximo ciclo normal.
+void actualizarProgreso(CloudClient* cloud, const char* estado, int progreso) {
+    if (!cloud) return;
+    if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(500)) == pdTRUE) {
+        g_telemetria.otaEstado = estado;
+        g_telemetria.otaProgreso = progreso;
+        cloud->enviarTelemetria(g_telemetria);
+        xSemaphoreGive(g_mutexEstado);
+    }
 }
 
 } // namespace
@@ -106,6 +121,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     if (cloud) {
         cloud->registrarAlerta("OTA", "INFO", "Iniciando descarga de firmware " + ota.version);
     }
+    actualizarProgreso(cloud, "DESCARGANDO", 0);
 
     Serial.printf("[OTA] Descargando %s (version %s)\n", ota.url.c_str(), ota.version.c_str());
 
@@ -116,6 +132,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     if (!http.begin(clienteSeguro, ota.url)) {
         Serial.println("[OTA ERROR] No se pudo iniciar la conexión HTTPS.");
         if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga abortada: no se pudo iniciar la conexión HTTPS con " + ota.url);
+        actualizarProgreso(cloud, "ERROR", 0);
         controlarLed(255, 0, 0);
         _enActualizacion = false;
         return;
@@ -125,6 +142,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     if (codigo != HTTP_CODE_OK) {
         Serial.printf("[OTA ERROR] HTTP %d\n", codigo);
         if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga abortada: el servidor respondió HTTP " + String(codigo));
+        actualizarProgreso(cloud, "ERROR", 0);
         http.end();
         controlarLed(255, 0, 0);
         _enActualizacion = false;
@@ -138,6 +156,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     if (tamano <= 0 || tamano > 3 * 1024 * 1024) {
         Serial.println("[OTA ERROR] Tamaño de firmware inválido (excede el tamaño de partición de 3MB).");
         if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga abortada: tamaño de firmware inválido (" + String(tamano) + " bytes).");
+        actualizarProgreso(cloud, "ERROR", 0);
         http.end();
         controlarLed(255, 0, 0);
         _enActualizacion = false;
@@ -148,6 +167,7 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     if (!buffer) {
         Serial.println("[OTA ERROR] Sin memoria PSRAM suficiente para el buffer de descarga.");
         if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga abortada: sin memoria PSRAM suficiente para " + String(tamano) + " bytes.");
+        actualizarProgreso(cloud, "ERROR", 0);
         http.end();
         controlarLed(255, 0, 0);
         _enActualizacion = false;
@@ -157,11 +177,19 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     WiFiClient* stream = http.getStreamPtr();
     size_t leidos = 0;
     uint32_t inicio = millis();
+    int ultimoProgresoReportado = -1;
+    // Reservamos 0-90% para la descarga y 90-100% para verificación/flasheo (mucho más rápidos
+    // en comparación) — reportar cada byte sería ruido; solo se empuja al cruzar cada 10%.
     while (leidos < (size_t)tamano && (millis() - inicio) < 60000) {
         if (stream->available()) {
             int n = stream->readBytes(buffer + leidos, min((size_t)stream->available(), (size_t)tamano - leidos));
             leidos += n;
             inicio = millis();
+            int progreso = (int)((leidos * 90ULL) / (size_t)tamano);
+            if (progreso >= ultimoProgresoReportado + 10) {
+                actualizarProgreso(cloud, "DESCARGANDO", progreso);
+                ultimoProgresoReportado = progreso;
+            }
         } else {
             delay(5);
         }
@@ -171,12 +199,14 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     if (leidos != (size_t)tamano) {
         Serial.println("[OTA ERROR] Descarga incompleta (timeout).");
         if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Descarga incompleta por timeout: " + String(leidos) + "/" + String(tamano) + " bytes.");
+        actualizarProgreso(cloud, "ERROR", 0);
         free(buffer);
         controlarLed(255, 0, 0);
         _enActualizacion = false;
         return;
     }
 
+    actualizarProgreso(cloud, "VERIFICANDO", 90);
     String motivoFalla;
     bool ok = verificarYFlashear(buffer, tamano, ota.sha256, ota.firmaBase64, motivoFalla);
     free(buffer);
@@ -184,12 +214,14 @@ void OtaManager::procesarActualizacion(const OtaEntrante& ota, CloudClient* clou
     if (!ok) {
         controlarLed(255, 0, 0);
         if (cloud) cloud->registrarAlerta("OTA", "CRITICA", "Actualización rechazada: " + motivoFalla);
+        actualizarProgreso(cloud, "ERROR", 0);
         _enActualizacion = false;
         return;
     }
 
     controlarLed(0, 255, 0);
     if (cloud) cloud->registrarAlerta("OTA", "INFO", "Firmware " + ota.version + " verificado y flasheado. Reiniciando...");
+    actualizarProgreso(cloud, "REINICIANDO", 100);
     delay(1500);
     esp_restart();
 }
