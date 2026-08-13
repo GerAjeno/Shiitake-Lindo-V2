@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { Save, Check, RefreshCw, Clock, Droplets, Sliders as SlidersIcon, ShieldAlert, CircleAlert } from "lucide-react";
+import { Save, Check, RefreshCw, Clock, Droplets, Sliders as SlidersIcon, ShieldAlert, CircleAlert, KeyRound } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -203,6 +203,104 @@ function TarjetaZona({ v, local, soloLectura, onCambiar, onOverrideInmediato }: 
   );
 }
 
+/**
+ * Autoservicio de contraseña — disponible para CUALQUIER rol (incluido "lectura"), a diferencia
+ * del resto de esta página que solo admin/operador pueden editar. Exige la contraseña actual
+ * (ver Backend/src/routes/me.ts) — no es un reseteo administrativo, es la propia cuenta.
+ */
+function CambiarPasswordPropia() {
+  const [actual, setActual] = useState("");
+  const [nueva, setNueva] = useState("");
+  const [confirmar, setConfirmar] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [exito, setExito] = useState(false);
+
+  const manejarSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setExito(false);
+    if (nueva !== confirmar) {
+      setError("La confirmación no coincide con la contraseña nueva.");
+      return;
+    }
+    if (nueva.length < 8) {
+      setError("La contraseña nueva debe tener al menos 8 caracteres.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      await apiFetch("/api/me/password", {
+        method: "PUT",
+        body: JSON.stringify({ passwordActual: actual, passwordNueva: nueva }),
+      });
+      setActual("");
+      setNueva("");
+      setConfirmar("");
+      setExito(true);
+      setTimeout(() => setExito(false), 3000);
+    } catch (err: any) {
+      setError(err?.message ?? "No se pudo cambiar la contraseña.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="glass-panel p-6 space-y-4">
+      <h3 className="text-sm font-bold uppercase tracking-wide flex items-center gap-2 text-slate-700 dark:text-slate-200">
+        <KeyRound className="w-4 h-4 text-cyan-600 dark:text-cyan-400" /> Cambiar mi contraseña
+      </h3>
+
+      {error && (
+        <div className="flex items-center gap-2 text-xs font-mono text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
+          <CircleAlert className="w-4 h-4 shrink-0" /> {error}
+        </div>
+      )}
+      {exito && (
+        <div className="flex items-center gap-2 text-xs font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">
+          <Check className="w-4 h-4 shrink-0" /> Contraseña actualizada.
+        </div>
+      )}
+
+      <form onSubmit={manejarSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+        <label className="text-xs font-mono text-slate-500 dark:text-slate-400">
+          Contraseña actual
+          <input
+            type="password" required value={actual} onChange={(e) => setActual(e.target.value)}
+            className="mt-1 w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-cyan-500"
+          />
+        </label>
+        <label className="text-xs font-mono text-slate-500 dark:text-slate-400">
+          Contraseña nueva
+          <input
+            type="password" required minLength={8} value={nueva} onChange={(e) => setNueva(e.target.value)}
+            placeholder="Mín. 8 caracteres"
+            className="mt-1 w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-cyan-500"
+          />
+        </label>
+        <label className="text-xs font-mono text-slate-500 dark:text-slate-400">
+          Confirmar contraseña nueva
+          <div className="mt-1 flex gap-2">
+            <input
+              type="password" required value={confirmar} onChange={(e) => setConfirmar(e.target.value)}
+              className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-cyan-500"
+            />
+            <button
+              type="submit"
+              disabled={guardando}
+              className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-bold font-mono bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-50 transition-colors"
+            >
+              {guardando ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {guardando ? "..." : "Guardar"}
+            </button>
+          </div>
+        </label>
+      </form>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { rol } = useAuth();
   const { actual, configuracion, conectado, espOnline } = useRealtimeData();
@@ -300,6 +398,8 @@ export default function SettingsPage() {
               </span>
             )}
           </div>
+
+          <CambiarPasswordPropia />
 
           {rol === "admin" && <FirmwareManager actual={actual} />}
 

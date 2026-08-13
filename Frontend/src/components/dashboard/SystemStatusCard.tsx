@@ -85,7 +85,7 @@ export function SystemStatusCard({ actual, espOnline = true, ultimaTelemetriaTs 
             <span>Sincronización</span>
           </div>
           <div className={`text-xs font-mono ${!espOnline ? "text-rose-500 dark:text-rose-400 font-bold" : "text-slate-800 dark:text-slate-300"}`}>
-            {ultimaTelemetriaTs ? new Date(ultimaTelemetriaTs).toLocaleTimeString("es-CL", { timeZone: "America/Santiago" }) : "En vivo"}
+            {ultimaTelemetriaTs ? new Date(ultimaTelemetriaTs).toLocaleTimeString("es-CL", { timeZone: "America/Santiago", hour12: false }) : "En vivo"}
           </div>
           <span className={`text-[10px] font-mono ${!espOnline ? "text-rose-500 font-bold" : "text-emerald-600 dark:text-emerald-400"}`}>
             {!espOnline ? "Pérdida de latido" : "Latido c/30s"}

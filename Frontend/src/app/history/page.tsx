@@ -111,7 +111,7 @@ function CurvasZona({ v, datos, humMin, humMax, formatearEjeX }: { v: VisualZona
               </defs>
               <XAxis dataKey="timestamp" type="number" domain={["dataMin", "dataMax"]} tickFormatter={formatearEjeX} stroke="#475569" fontSize={11} />
               <YAxis domain={[40, 100]} stroke="#475569" fontSize={11} unit="%" />
-              <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "0.75rem", fontSize: "12px" }} labelFormatter={(t) => new Date(t).toLocaleString("es-CL", { timeZone: "America/Santiago" })} />
+              <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "0.75rem", fontSize: "12px" }} labelFormatter={(t) => new Date(t).toLocaleString("es-CL", { timeZone: "America/Santiago", hour12: false })} />
               <Legend wrapperStyle={{ fontSize: "12px" }} />
               <ReferenceLine y={humMin} stroke={v.colorHex} strokeDasharray="3 3" label={{ value: `Mín (${humMin}%)`, fill: v.colorHex, fontSize: 10 }} />
               <ReferenceLine y={humMax} stroke={v.colorHex} strokeDasharray="3 3" label={{ value: `Máx (${humMax}%)`, fill: v.colorHex, fontSize: 10 }} />
@@ -133,7 +133,7 @@ function CurvasZona({ v, datos, humMin, humMax, formatearEjeX }: { v: VisualZona
             <LineChart data={datos}>
               <XAxis dataKey="timestamp" type="number" domain={["dataMin", "dataMax"]} tickFormatter={formatearEjeX} stroke="#475569" fontSize={11} />
               <YAxis domain={["auto", "auto"]} stroke="#475569" fontSize={11} unit="°C" />
-              <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "0.75rem", fontSize: "12px" }} labelFormatter={(t) => new Date(t).toLocaleString("es-CL", { timeZone: "America/Santiago" })} />
+              <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "0.75rem", fontSize: "12px" }} labelFormatter={(t) => new Date(t).toLocaleString("es-CL", { timeZone: "America/Santiago", hour12: false })} />
               <Legend wrapperStyle={{ fontSize: "12px" }} />
               <Line type="monotone" dataKey={v.campoTemp} name={`Temp. ${v.nombre} (°C)`} stroke={v.colorHex} strokeWidth={2.5} dot={false} connectNulls={false} />
             </LineChart>
@@ -162,7 +162,7 @@ function CurvasZona({ v, datos, humMin, humMax, formatearEjeX }: { v: VisualZona
               <YAxis domain={[0, 1]} ticks={[0, 1]} tickFormatter={(v2) => (v2 === 1 ? "ON" : "OFF")} stroke="#475569" fontSize={11} />
               <Tooltip
                 contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "0.75rem", fontSize: "12px" }}
-                labelFormatter={(t) => new Date(t).toLocaleString("es-CL", { timeZone: "America/Santiago" })}
+                labelFormatter={(t) => new Date(t).toLocaleString("es-CL", { timeZone: "America/Santiago", hour12: false })}
                 formatter={(val) => [val === 1 ? "ENCENDIDO (ON)" : "APAGADO (OFF)", "Estado relé"]}
               />
               <Area type="stepAfter" dataKey={v.campoRele} name={`Estado humidificador ${v.nombre}`} stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill={`url(#${gradRele})`} connectNulls={false} />
@@ -183,7 +183,7 @@ function CurvasZona({ v, datos, humMin, humMax, formatearEjeX }: { v: VisualZona
             <LineChart data={datos}>
               <XAxis dataKey="timestamp" type="number" domain={["dataMin", "dataMax"]} tickFormatter={formatearEjeX} stroke="#475569" fontSize={11} />
               <YAxis domain={["auto", "auto"]} stroke="#475569" fontSize={11} />
-              <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "0.75rem", fontSize: "12px" }} labelFormatter={(t) => new Date(t).toLocaleString("es-CL", { timeZone: "America/Santiago" })} />
+              <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "0.75rem", fontSize: "12px" }} labelFormatter={(t) => new Date(t).toLocaleString("es-CL", { timeZone: "America/Santiago", hour12: false })} />
               <Legend wrapperStyle={{ fontSize: "12px" }} />
               <Line type="monotone" dataKey={v.campoCo2} name={`CO2 / Aire ${v.nombre} (PPM/ADC)`} stroke="#a855f7" strokeWidth={2.5} dot={false} connectNulls={false} />
             </LineChart>
@@ -220,12 +220,12 @@ export default function HistoryPage() {
     const fecha = new Date(tick);
     const zonaHoraria = "America/Santiago";
     if (rango === "1h" || rango === "6h" || rango === "24h") {
-      return fecha.toLocaleTimeString("es-CL", { timeZone: zonaHoraria, hour: "2-digit", minute: "2-digit" });
+      return fecha.toLocaleTimeString("es-CL", { timeZone: zonaHoraria, hour: "2-digit", minute: "2-digit", hour12: false });
     }
     if (rango === "1y" || rango === "3y") {
       return fecha.toLocaleDateString("es-CL", { timeZone: zonaHoraria, month: "short", year: "numeric" });
     }
-    return fecha.toLocaleDateString("es-CL", { timeZone: zonaHoraria, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    return fecha.toLocaleDateString("es-CL", { timeZone: zonaHoraria, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
   };
 
   const estZona: EstadisticasZona = pestañaZona === "descanso" ? estadisticas.descanso : estadisticas.atriles;
@@ -255,7 +255,7 @@ export default function HistoryPage() {
 
       datosHistoricos.forEach((p) => {
         hojaDatos.addRow({
-          fecha: new Date(p.timestamp).toLocaleString("es-CL", { timeZone: "America/Santiago" }),
+          fecha: new Date(p.timestamp).toLocaleString("es-CL", { timeZone: "America/Santiago", hour12: false }),
           humAt: p.humedadAtriles, tempAt: p.tempAtriles, co2At: p.co2Atriles,
           releAt: p.releAtriles === 1 ? "ENCENDIDO" : p.releAtriles === 0 ? "APAGADO" : "",
           humDe: p.humedadDescanso, tempDe: p.tempDescanso, co2De: p.co2Descanso,

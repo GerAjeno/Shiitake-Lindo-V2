@@ -62,7 +62,7 @@ function formatearTimestamp(iso: string) {
   const fecha = new Date(iso);
   if (isNaN(fecha.getTime())) return "--:--:--";
   const opciones = { timeZone: "America/Santiago" } as const;
-  return `${fecha.toLocaleDateString("es-CL", { ...opciones, day: "2-digit", month: "2-digit" })} ${fecha.toLocaleTimeString("es-CL", { ...opciones, hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+  return `${fecha.toLocaleDateString("es-CL", { ...opciones, day: "2-digit", month: "2-digit" })} ${fecha.toLocaleTimeString("es-CL", { ...opciones, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}`;
 }
 
 export default function LogsPage() {

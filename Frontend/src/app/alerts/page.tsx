@@ -76,7 +76,7 @@ export default function AlertsPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{a.mensaje}</p>
                     <p className="text-[11px] text-slate-500 font-mono mt-1">
-                      {a.categoria} · {new Date(a.timestamp).toLocaleString("es-CL", { timeZone: "America/Santiago" })}
+                      {a.categoria} · {new Date(a.timestamp).toLocaleString("es-CL", { timeZone: "America/Santiago", hour12: false })}
                     </p>
                   </div>
                   {!a.resuelta && puedeResolver && (

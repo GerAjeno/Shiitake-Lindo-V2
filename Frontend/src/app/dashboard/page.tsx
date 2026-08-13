@@ -53,7 +53,7 @@ export default function DashboardPage() {
                 <div>
                   El microcontrolador dejó de enviar telemetría en tiempo real (última lectura registrada:{" "}
                   <strong className="text-white bg-rose-900/80 px-1.5 py-0.5 rounded border border-rose-700">
-                    {new Date(ultimaTelemetriaTs).toLocaleTimeString("es-CL", { timeZone: "America/Santiago" })}
+                    {new Date(ultimaTelemetriaTs).toLocaleTimeString("es-CL", { timeZone: "America/Santiago", hour12: false })}
                   </strong>
                   ). Verifique la alimentación eléctrica y la señal WiFi del módulo en el invernadero.
                 </div>
