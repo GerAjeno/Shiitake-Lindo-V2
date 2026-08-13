@@ -109,16 +109,21 @@ void CloudClient::procesarMensajeEntrante(const String& json) {
     // justo cuando tareaControl está leyendo esos mismos campos es una condición de carrera real
     // (riesgo de corrupción de heap o crash), no solo teórica en un sistema dual-core.
     //
-    // Timeout corto (200ms, igual al resto del proyecto) y NO 2000ms como en un intento anterior:
-    // este método corre dentro de _ws.loop(), que también atiende el ping/pong del WebSocket —
-    // bloquearlo varios segundos aquí (si tareaControl está ocupada con I/O Modbus) le impedía a
-    // la librería responder el heartbeat a tiempo, y el backend terminaba cerrando la conexión
-    // por timeout — un bucle de reconexión constante que en la práctica es peor que la rara
-    // colisión que este mutex intenta evitar. Perder un mensaje ocasional es recuperable (config
-    // se reenvía en el próximo cambio, comando manual se puede reintentar); una tarea de red
-    // bloqueada 2s repetidamente no lo es.
-    if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) != pdTRUE) {
+    // Timeout corto (500ms — subido desde 200ms tras confirmar que un mensaje "ota" podía perderse
+    // así en silencio, ver registrarLog abajo) y NO 2000ms como en un intento anterior: este método
+    // corre dentro de _ws.loop(), que también atiende el ping/pong del WebSocket — bloquearlo varios
+    // segundos aquí (si tareaControl está ocupada con I/O Modbus) le impedía a la librería responder
+    // el heartbeat (timeout de pong: 3000ms, ver CloudClient::inicializar) a tiempo, y el backend
+    // terminaba cerrando la conexión por timeout — un bucle de reconexión constante que en la
+    // práctica es peor que la rara colisión que este mutex intenta evitar. 500ms deja margen amplio
+    // bajo esos 3000ms mientras reduce la ventana de colisión con una escritura Modbus lenta.
+    if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(500)) != pdTRUE) {
         Serial.println("[NUBE] No se pudo tomar el mutex de estado a tiempo — mensaje entrante descartado.");
+        // Antes esto era invisible fuera del Monitor Serie — un mensaje "ota" perdido acá parecía,
+        // desde la web, que la actualización nunca hubiera llegado al equipo. registrarLog() no
+        // necesita el mutex (solo serializa y manda por WS), así que es seguro llamarlo justo
+        // después de fallar en tomarlo.
+        registrarLog("NUBE", "ADVERTENCIA", "Mensaje entrante ('" + tipoMsg + "') descartado: mutex de estado ocupado.");
         return;
     }
 
