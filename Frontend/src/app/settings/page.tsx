@@ -399,8 +399,6 @@ export default function SettingsPage() {
             )}
           </div>
 
-          <CambiarPasswordPropia />
-
           {rol === "admin" && <FirmwareManager actual={actual} />}
 
           {!localAtriles || !localDescanso ? (
@@ -411,6 +409,10 @@ export default function SettingsPage() {
                 <TarjetaZona v={VISUAL_ATRILES} local={localAtriles} soloLectura={soloLectura} onCambiar={(c) => setLocalAtriles({ ...localAtriles, ...c })} onOverrideInmediato={(v) => overrideInmediato("atriles", v)} />
                 <TarjetaZona v={VISUAL_DESCANSO} local={localDescanso} soloLectura={soloLectura} onCambiar={(c) => setLocalDescanso({ ...localDescanso, ...c })} onOverrideInmediato={(v) => overrideInmediato("descanso", v)} />
               </div>
+
+              {/* Fuera del gate !soloLectura a propósito: cualquier rol (incluido "lectura") puede
+                  cambiar su propia contraseña, aunque no pueda editar el resto de esta página. */}
+              <CambiarPasswordPropia />
 
               {!soloLectura && (
                 <div className="p-6 glass-panel">
