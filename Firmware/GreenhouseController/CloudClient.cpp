@@ -42,6 +42,14 @@ void CloudClient::manejarEvento(WStype_t tipo, uint8_t* payload, size_t longitud
             Serial.println("[NUBE] WebSocket desconectado.");
             _conectado = false;
             break;
+        case WStype_PONG:
+            // Confirma que la conexión sigue viva aunque el backend no tenga nada nuevo que
+            // mandar (sin config/comando/OTA pendiente puede pasar horas sin un WStype_TEXT
+            // entrante) — sin esto, millisDesdeUltimoContactoExitoso() crecía igual con la
+            // conexión sana y disparaba el fallback a TEMPORIZADO (30 min, ver Config.h) por error,
+            // apagando un humidificador en modo MANUAL sin que hubiera ningún problema real de red.
+            _ultimoContactoExitosoMillis = millis();
+            break;
         case WStype_TEXT: {
             _ultimoContactoExitosoMillis = millis();
             String texto((char*)payload, longitud);
