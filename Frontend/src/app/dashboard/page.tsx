@@ -35,13 +35,17 @@ export default function DashboardPage() {
   const co2Deshabilitados =
     configuracion?.sensoresHabilitados && configuracion.sensoresHabilitados.mq1 === false && configuracion.sensoresHabilitados.mq2 === false;
 
+  // Alertas de calidad de aire (MQ135) ocultas solo en este banner en vivo — a pedido del usuario,
+  // por falsos positivos con la niebla de los humidificadores. Siguen visibles en /alerts.
+  const alertasSinAire = alertas.filter((a) => !a.id.startsWith("AIRE_"));
+
   return (
     <div className="min-h-screen flex bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Header conectadoRTDB={conectado} espOnline={espOnline} />
         <main className="flex-1 p-4 pb-24 md:p-8 md:pb-8 overflow-y-auto space-y-6">
-          <AlertsBanner alertas={alertas} onResolver={resolverAlerta} puedeResolver={puedeControlar} />
+          <AlertsBanner alertas={alertasSinAire} onResolver={resolverAlerta} puedeResolver={puedeControlar} />
 
           {!espOnline && ultimaTelemetriaTs && (
             <div className="bg-rose-950/90 border-2 border-rose-500/80 p-4 rounded-xl flex items-center gap-3 text-rose-200 font-mono text-xs shadow-xl">
