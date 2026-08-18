@@ -70,7 +70,7 @@ namespace Config {
         0x5a, 0x94
     }; // Generada en el servidor con `npm run ota:generar-clave` (la clave privada NUNCA sale de infra/secrets/ en la VM)
 
-    const char* const ZONA_HORARIA_POSIX = "CLT3CLST,M9.1.6/24,M4.1.6/24"; // America/Santiago con DST
+    const char* const ZONA_HORARIA_POSIX = "CLT4CLST,M9.1.6/24,M4.1.6/24"; // America/Santiago con DST
 
     // ========================================================================
     // FREERTOS
