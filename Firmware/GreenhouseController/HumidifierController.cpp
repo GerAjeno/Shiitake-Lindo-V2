@@ -1,7 +1,40 @@
 #include "HumidifierController.h"
 #include "Config.h"
+#include <time.h>
 
 HumidifierController::HumidifierController(RelayModbusClient* relayClient) : _relayClient(relayClient) {}
+
+/** Convierte "HH:mm" a minutos desde medianoche; -1 si el formato es inválido. */
+static int aMinutosDelDia(const String& hhmm) {
+    if (hhmm.length() < 5 || hhmm.charAt(2) != ':') return -1;
+    int h = hhmm.substring(0, 2).toInt();
+    int m = hhmm.substring(3, 5).toInt();
+    if (h < 0 || h > 23 || m < 0 || m > 59) return -1;
+    return h * 60 + m;
+}
+
+/** true si minutoActual cae en [inicio, fin), soportando bloques que cruzan medianoche (ej. 22:00 -> 06:00). */
+static bool minutoEnVentana(int minutoActual, int inicio, int fin) {
+    if (inicio <= fin) return minutoActual >= inicio && minutoActual < fin;
+    return minutoActual >= inicio || minutoActual < fin;
+}
+
+bool HumidifierController::evaluarRangoHorario(const ConfiguracionZona& zona) const {
+    time_t ahora = time(nullptr);
+    struct tm ti;
+    localtime_r(&ahora, &ti);
+    int minutoActual = ti.tm_hour * 60 + ti.tm_min;
+
+    for (uint8_t i = 0; i < zona.cantidadRangos; i++) {
+        const RangoHorario& r = zona.rangosHorarios[i];
+        if (!r.habilitado) continue;
+        int inicio = aMinutosDelDia(r.inicio);
+        int fin = aMinutosDelDia(r.fin);
+        if (inicio < 0 || fin < 0) continue;
+        if (minutoEnVentana(minutoActual, inicio, fin)) return true;
+    }
+    return false;
+}
 
 void HumidifierController::inicializar() {
     _relayClient->inicializar();
@@ -52,7 +85,7 @@ void HumidifierController::evaluarEstadoInicial(const ResultadoZonaDHT& atriles,
                                                  ConfiguracionSistema& config) {
     bool encenderAt = false;
     if (config.atriles.modo == ModoControl::MANUAL) encenderAt = config.atriles.humidificadorManual;
-    else if (config.atriles.modo == ModoControl::TEMPORIZADO) encenderAt = config.atriles.temporizadorEncendido;
+    else if (config.atriles.modo == ModoControl::TEMPORIZADO) encenderAt = evaluarRangoHorario(config.atriles);
     else if (!atriles.falloCritico) encenderAt = atriles.humedadPromedio < config.atriles.humedadMinima;
 
     if (_relayClient->escribirCanal(Config::RELE_CANAL_ATRILES, encenderAt)) {
@@ -65,7 +98,7 @@ void HumidifierController::evaluarEstadoInicial(const ResultadoZonaDHT& atriles,
 
     bool encenderDe = false;
     if (config.descanso.modo == ModoControl::MANUAL) encenderDe = config.descanso.humidificadorManual;
-    else if (config.descanso.modo == ModoControl::TEMPORIZADO) encenderDe = config.descanso.temporizadorEncendido;
+    else if (config.descanso.modo == ModoControl::TEMPORIZADO) encenderDe = evaluarRangoHorario(config.descanso);
     else if (!descanso.falloCritico) encenderDe = descanso.humedadPromedio < config.descanso.humedadMinima;
 
     if (_relayClient->escribirCanal(Config::RELE_CANAL_DESCANSO, encenderDe)) {
@@ -104,7 +137,7 @@ void HumidifierController::actualizarControl(const ResultadoZonaDHT& atriles, co
     } else {
         bool nuevoEstado = _estadoAtriles;
         if (modoEfAt == ModoControl::MANUAL) nuevoEstado = config.atriles.humidificadorManual;
-        else if (modoEfAt == ModoControl::TEMPORIZADO) nuevoEstado = config.atriles.temporizadorEncendido;
+        else if (modoEfAt == ModoControl::TEMPORIZADO) nuevoEstado = evaluarRangoHorario(config.atriles);
         else if (!isnan(atriles.humedadPromedio)) {
             if (atriles.humedadPromedio < config.atriles.humedadMinima) nuevoEstado = true;
             else if (atriles.humedadPromedio >= config.atriles.humedadMaxima) nuevoEstado = false;
@@ -133,7 +166,7 @@ void HumidifierController::actualizarControl(const ResultadoZonaDHT& atriles, co
     } else {
         bool nuevoEstado = _estadoDescanso;
         if (modoEfDe == ModoControl::MANUAL) nuevoEstado = config.descanso.humidificadorManual;
-        else if (modoEfDe == ModoControl::TEMPORIZADO) nuevoEstado = config.descanso.temporizadorEncendido;
+        else if (modoEfDe == ModoControl::TEMPORIZADO) nuevoEstado = evaluarRangoHorario(config.descanso);
         else if (!isnan(descanso.humedadPromedio)) {
             if (descanso.humedadPromedio < config.descanso.humedadMinima) nuevoEstado = true;
             else if (descanso.humedadPromedio >= config.descanso.humedadMaxima) nuevoEstado = false;

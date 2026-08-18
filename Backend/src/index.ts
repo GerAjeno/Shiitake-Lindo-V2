@@ -7,6 +7,7 @@ import { asegurarAdminInicial } from './auth/bootstrap';
 import { requireAuth } from './auth/middleware';
 import { iniciarWebSocketHub } from './ws/hub';
 import { iniciarJobsPeriodicos } from './jobs/aggregate';
+import { iniciarJobTemporizador } from './jobs/temporizador';
 import { authRouter } from './routes/auth';
 import { configRouter } from './routes/config';
 import { historialRouter } from './routes/historial';
@@ -61,6 +62,7 @@ async function main() {
   const server = http.createServer(app);
   iniciarWebSocketHub(server);
   iniciarJobsPeriodicos();
+  iniciarJobTemporizador();
 
   const PORT = Number(process.env.PORT ?? 3001);
   server.listen(PORT, () => {

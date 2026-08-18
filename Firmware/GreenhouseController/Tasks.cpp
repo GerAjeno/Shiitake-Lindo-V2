@@ -113,6 +113,13 @@ void iniciarTareas() {
     // RTC: si tiene hora válida, se usa para poner el reloj del sistema de inmediato — así
     // timestampIso() (cada muestra del historial) es correcto desde el arranque, sin esperar a
     // que WiFi/NTP conecten (puede tardar, o no pasar nunca si se perdió el internet).
+    // Fija la zona horaria ANTES de evaluar cualquier horario programado (TEMPORIZADO): sin esto,
+    // localtime_r() interpretaría la hora del sistema como UTC hasta que WiFi conectara y
+    // configTzTime() la fijara (ver tareaRed), rompiendo el modo TEMPORIZADO mientras el equipo
+    // arranca sin internet u opera en fallback offline.
+    setenv("TZ", Config::ZONA_HORARIA_POSIX, 1);
+    tzset();
+
     if (g_rtc.inicializar() && g_rtc.horaValida()) {
         struct timeval tv;
         tv.tv_sec = g_rtc.obtenerEpocaUtc();

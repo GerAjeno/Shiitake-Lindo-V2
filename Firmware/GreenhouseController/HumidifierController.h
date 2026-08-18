@@ -51,6 +51,8 @@ private:
     uint32_t _ultimaLecturaEstadoMillis = 0;
 
     ModoControl modoEfectivo(ModoControl modoConfigurado, bool offlineFallbackActivo) const;
+    /** Evalúa los rangosHorarios de la zona contra la hora local actual (RTC/NTP + TZ Santiago). */
+    bool evaluarRangoHorario(const ConfiguracionZona& zona) const;
     void aplicarCanal(uint8_t canal, bool encender, const char* zonaNombre);
     void notificarCambio(uint8_t canal, bool nuevoEstado, ModoControl modo, float humedad, float temperatura,
                           float humMin, float humMax, const char* motivoEspecial = nullptr);
