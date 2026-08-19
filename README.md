@@ -59,7 +59,8 @@ Shiitake-Lindo-V2/
 ├── infra/                           # docker-compose, Caddyfile, migraciones SQL
 └── docs/
     ├── PLAN_MIGRACION.md            # Plan completo de migración (contexto y decisiones)
-    └── RUNBOOK_INFRA.md             # Guía paso a paso de despliegue en el servidor
+    ├── RUNBOOK_INFRA.md             # Guía paso a paso de despliegue inicial en el servidor
+    └── OPERACIONES.md               # Referencia rápida del día a día: deploy, logs, rollback, backups
 ```
 
 ## Desarrollo local
