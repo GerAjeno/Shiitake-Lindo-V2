@@ -15,6 +15,7 @@ import { autenticarWebSocketNavegador, UsuarioAutenticado } from '../auth/middle
 import { NOMBRE_COOKIE_SESION } from '../auth/local';
 import { autenticarDispositivo } from '../auth/device';
 import { obtenerConfiguracionCompleta } from '../routes/config';
+import { CATEGORIAS_LOG, NIVELES_LOG, TIPOS_ALERTA } from '../shared/types';
 import type {
   MensajeClienteAServidor,
   MensajeServidorACliente,
@@ -22,9 +23,47 @@ import type {
   ComandoManual,
 } from '../shared/types';
 
+// Ningún mensaje legítimo (telemetría, lote de historial de 30s, log/alerta puntual) se acerca a
+// esto — es un tope de seguridad contra un firmware con bug o un token filtrado, no un límite
+// operativo real.
+const MAX_PAYLOAD_BYTES = 64 * 1024;
+
+// Límite de mensajes por conexión: generoso para el uso normal (telemetría+sensores+historial
+// cada ~30s = ~0.1 msg/s por dispositivo; un navegador humano no se acerca a esto tampoco), pero
+// corta en seco un bucle de envío descontrolado antes de que llene la base de datos o la memoria.
+export const LIMITE_MENSAJES = 20;
+export const VENTANA_LIMITE_MS = 10 * 1000;
+
 interface ClienteNavegador {
   ws: WebSocket;
   usuario: UsuarioAutenticado;
+  vivo: boolean;
+}
+
+/** Contador de mensajes por conexión en una ventana deslizante simple (reinicia al expirar). */
+export class LimitadorMensajes {
+  private cuenta = 0;
+  private desde = Date.now();
+  private avisoEmitido = false;
+
+  /** true si el mensaje debe procesarse; false si hay que descartarlo por exceso de tasa. */
+  permitir(): boolean {
+    const ahora = Date.now();
+    if (ahora - this.desde > VENTANA_LIMITE_MS) {
+      this.cuenta = 0;
+      this.desde = ahora;
+      this.avisoEmitido = false;
+    }
+    this.cuenta++;
+    return this.cuenta <= LIMITE_MENSAJES;
+  }
+
+  /** Para no inundar los logs propios del backend: un solo aviso por ventana excedida. */
+  avisarUnaVez(): boolean {
+    if (this.avisoEmitido) return false;
+    this.avisoEmitido = true;
+    return true;
+  }
 }
 
 const navegadores = new Set<ClienteNavegador>();
@@ -157,6 +196,13 @@ async function procesarMensajeDispositivo(dispositivoId: string, mensaje: Mensaj
     }
     case 'alerta_dispositivo': {
       const { id, tipo: tipoAlerta, mensaje: texto } = mensaje.datos;
+      // El firmware es código propio y confiable, pero un typo en un `registrarAlerta(...)` nuevo
+      // (agregado en un cambio futuro) antes rompía el filtrado del frontend en silencio — la fila
+      // se guardaba igual, pero con un `tipo` que ninguna vista sabía interpretar. Ahora al menos
+      // queda un aviso explícito en los logs del backend (`docker compose logs backend`).
+      if (!(TIPOS_ALERTA as readonly string[]).includes(tipoAlerta)) {
+        console.warn(`[WS] Alerta de dispositivo con tipo no reconocido: "${tipoAlerta}" (esperado uno de ${TIPOS_ALERTA.join(', ')}). Revisar CloudClient::registrarAlerta en el firmware.`);
+      }
       await pool.query(
         `INSERT INTO alertas (id, tipo, categoria, mensaje, resuelta, ts) VALUES ($1, $2, 'FIRMWARE', $3, false, now())
          ON CONFLICT (id) DO UPDATE SET tipo = EXCLUDED.tipo, mensaje = EXCLUDED.mensaje, ts = now(), resuelta = false`,
@@ -170,6 +216,15 @@ async function procesarMensajeDispositivo(dispositivoId: string, mensaje: Mensaj
     }
     case 'log_dispositivo': {
       const { categoria, nivel, mensaje: texto } = mensaje.datos;
+      // Mismo motivo que en 'alerta_dispositivo' arriba: un typo en categoria/nivel del lado del
+      // firmware (o un nuevo `registrarLog(...)` con una categoría inventada) antes se guardaba
+      // igual pero desaparecía de los filtros por categoría del frontend sin ningún rastro.
+      if (!(CATEGORIAS_LOG as readonly string[]).includes(categoria)) {
+        console.warn(`[WS] Log de dispositivo con categoría no reconocida: "${categoria}" (esperado una de ${CATEGORIAS_LOG.join(', ')}). Revisar CloudClient::registrarLog en el firmware.`);
+      }
+      if (!(NIVELES_LOG as readonly string[]).includes(nivel)) {
+        console.warn(`[WS] Log de dispositivo con nivel no reconocido: "${nivel}" (esperado uno de ${NIVELES_LOG.join(', ')}).`);
+      }
       await pool.query(
         `INSERT INTO sistema_logs (categoria, nivel, mensaje) VALUES ($1, $2, $3)`,
         [categoria, nivel, texto]
@@ -191,8 +246,52 @@ async function procesarMensajeDispositivo(dispositivoId: string, mensaje: Mensaj
   }
 }
 
+/**
+ * Cierra de forma explícita (y avisada) una conexión de dispositivo previa que sigue abierta
+ * cuando llega una nueva conexión con el mismo id — antes esto pasaba en silencio: la conexión
+ * vieja quedaba huérfana (nunca se cerraba, solo dejaba de recibir tráfico) y nadie se enteraba
+ * de que había dos conexiones con el mismo token disputándose el rol de "el dispositivo".
+ */
+async function reemplazarDispositivoActivo(dispositivoId: string, nuevoWs: WebSocket) {
+  if (dispositivoActivo && dispositivoActivo.ws.readyState === WebSocket.OPEN) {
+    console.warn(`[WS] Nueva conexión de dispositivo "${dispositivoId}" reemplaza a una ya activa — cerrando la anterior.`);
+    dispositivoActivo.ws.close(4008, 'Reemplazado por una nueva conexión con el mismo id');
+    await pool.query(
+      `INSERT INTO alertas (id, tipo, categoria, mensaje, resuelta, ts) VALUES ('DISPOSITIVO_REEMPLAZADO', 'ADVERTENCIA', 'FIRMWARE', $1, false, now())
+       ON CONFLICT (id) DO UPDATE SET mensaje = EXCLUDED.mensaje, ts = now(), resuelta = false`,
+      [`Se detectó una segunda conexión del dispositivo "${dispositivoId}" — la anterior fue reemplazada.`]
+    );
+    difundirANavegadores({
+      tipo: 'alerta',
+      datos: {
+        id: 'DISPOSITIVO_REEMPLAZADO', tipo: 'ADVERTENCIA', categoria: 'FIRMWARE',
+        mensaje: `Se detectó una segunda conexión del dispositivo "${dispositivoId}" — la anterior fue reemplazada.`,
+        resuelta: false, timestamp: new Date().toISOString(),
+      },
+    });
+  }
+  dispositivoActivo = { id: dispositivoId, ws: nuevoWs };
+}
+
 export function iniciarWebSocketHub(server: http.Server) {
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_PAYLOAD_BYTES });
+
+  // Detecta navegadores "zombis" (ej. una laptop que se durmió sin cerrar el socket limpio):
+  // sin esto, `navegadores` solo se poda en el evento 'close', que una conexión medio-caída
+  // puede no disparar nunca — el Set crecía indefinidamente hasta el próximo reinicio del backend.
+  const INTERVALO_HEARTBEAT_MS = 30 * 1000;
+  const intervaloHeartbeat = setInterval(() => {
+    for (const cliente of navegadores) {
+      if (!cliente.vivo) {
+        cliente.ws.terminate();
+        navegadores.delete(cliente);
+        continue;
+      }
+      cliente.vivo = false;
+      cliente.ws.ping();
+    }
+  }, INTERVALO_HEARTBEAT_MS);
+  wss.on('close', () => clearInterval(intervaloHeartbeat));
 
   wss.on('connection', async (ws, req) => {
     const url = new URL(req.url ?? '', 'http://localhost');
@@ -207,7 +306,7 @@ export function iniciarWebSocketHub(server: http.Server) {
         return;
       }
       console.log(`[WS] Dispositivo conectado: ${dispositivoId}`);
-      dispositivoActivo = { id: dispositivoId, ws };
+      await reemplazarDispositivoActivo(dispositivoId, ws);
 
       // El servidor SIEMPRE gana (decisión explícita del usuario, sin comparar versiones):
       // un dispositivo recién conectado/reiniciado debe recibir la config real de inmediato,
@@ -220,7 +319,16 @@ export function iniciarWebSocketHub(server: http.Server) {
       }
       difundirANavegadores({ tipo: 'telemetria', datos: { espOnline: true } as never });
 
-      ws.on('message', (data) => manejarMensajeDispositivo(dispositivoId, data.toString()));
+      const limitador = new LimitadorMensajes();
+      ws.on('message', (data) => {
+        if (!limitador.permitir()) {
+          if (limitador.avisarUnaVez()) {
+            console.warn(`[WS] Dispositivo "${dispositivoId}" superó ${LIMITE_MENSAJES} mensajes en ${VENTANA_LIMITE_MS / 1000}s — descartando mensajes hasta que baje el ritmo.`);
+          }
+          return;
+        }
+        manejarMensajeDispositivo(dispositivoId, data.toString());
+      });
       ws.on('close', async () => {
         console.log(`[WS] Dispositivo desconectado: ${dispositivoId}`);
         if (dispositivoActivo?.ws === ws) dispositivoActivo = null;
@@ -234,11 +342,19 @@ export function iniciarWebSocketHub(server: http.Server) {
       const token = cookies[NOMBRE_COOKIE_SESION] ?? '';
       try {
         const usuario = await autenticarWebSocketNavegador(token);
-        const cliente: ClienteNavegador = { ws, usuario };
+        const cliente: ClienteNavegador = { ws, usuario, vivo: true };
         navegadores.add(cliente);
         console.log(`[WS] Navegador conectado: ${usuario.email} (${usuario.rol})`);
+        ws.on('pong', () => { cliente.vivo = true; });
 
+        const limitador = new LimitadorMensajes();
         ws.on('message', async (data) => {
+          if (!limitador.permitir()) {
+            if (limitador.avisarUnaVez()) {
+              console.warn(`[WS] Navegador "${usuario.email}" superó ${LIMITE_MENSAJES} mensajes en ${VENTANA_LIMITE_MS / 1000}s — descartando mensajes hasta que baje el ritmo.`);
+            }
+            return;
+          }
           let mensaje: MensajeClienteAServidor;
           try {
             mensaje = JSON.parse(data.toString());

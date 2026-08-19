@@ -92,7 +92,8 @@ export interface TelemetriaActual {
   otaProgreso?: number;
 }
 
-export type TipoAlerta = 'INFO' | 'ADVERTENCIA' | 'CRITICA';
+export const TIPOS_ALERTA = ['INFO', 'ADVERTENCIA', 'CRITICA'] as const;
+export type TipoAlerta = (typeof TIPOS_ALERTA)[number];
 
 export interface Alerta {
   id: string;
@@ -102,6 +103,19 @@ export interface Alerta {
   resuelta: boolean;
   timestamp: string;
 }
+
+/**
+ * Categorías reconocidas de `sistema_logs`. Es el mismo contrato que documenta
+ * `Firmware/GreenhouseController/CloudClient.h` en `registrarLog()` (el firmware, en C++, no puede
+ * importar este archivo, así que ese comentario debe mantenerse en sincronía a mano con esta lista).
+ * `Backend/src/ws/hub.ts` avisa por consola si el dispositivo manda una categoría fuera de esta
+ * lista — antes un typo ahí rompía el filtrado del frontend en silencio, sin ningún error visible.
+ */
+export const CATEGORIAS_LOG = ['ACTUADOR', 'SENSOR', 'WIFI', 'CONFIG', 'CONFIGURACION', 'USUARIOS', 'ALERTA', 'OTA', 'SISTEMA', 'NUBE'] as const;
+export type CategoriaLog = (typeof CATEGORIAS_LOG)[number];
+
+export const NIVELES_LOG = ['INFO', 'ADVERTENCIA', 'ERROR', 'CRITICA'] as const;
+export type NivelLog = (typeof NIVELES_LOG)[number];
 
 export interface LogSistema {
   id: string;

@@ -58,7 +58,13 @@ public:
     void enviarAck(const String& orderId, bool ejecutado, const String& error = "");
 
     // INotificadorEventos
+    // `tipo` debe ser uno de: INFO, ADVERTENCIA, CRITICA (ver TIPOS_ALERTA en Shared/types.ts).
     void registrarAlerta(const char* id, const char* tipo, const String& mensaje) override;
+    // `categoria` debe ser una de: ACTUADOR, SENSOR, WIFI, CONFIG, CONFIGURACION, USUARIOS, ALERTA,
+    // OTA, SISTEMA, NUBE (ver CATEGORIAS_LOG en Shared/types.ts) y `nivel` uno de: INFO,
+    // ADVERTENCIA, ERROR, CRITICA (ver NIVELES_LOG). Backend/src/ws/hub.ts valida esto al recibir
+    // el mensaje y avisa por consola si no coincide — pero como el firmware (C++) no puede importar
+    // ese archivo TypeScript, esta lista debe mantenerse a mano en sincronía con la de allá.
     void registrarLog(const char* categoria, const char* nivel, const String& mensaje) override;
 
     ComandoEntrante tomarComandoPendiente();

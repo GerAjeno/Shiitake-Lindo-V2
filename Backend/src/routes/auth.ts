@@ -18,7 +18,29 @@ interface FilaUsuario {
 // acceso a actuadores físicos de 220V) no tenía ninguna protección contra fuerza bruta.
 const VENTANA_MS = 15 * 60 * 1000;
 const INTENTOS_MAXIMOS = 10;
+// Sin esto el Map crecía sin límite: cada IP nueva que intentaba loguearse (aunque fuera solo una
+// vez, sin llegar a bloquearse) dejaba una entrada que nunca se borraba hasta que volvía a
+// consultarse esa misma IP — un escaneo lento con muchas IPs distintas era una fuga de memoria lenta.
+const MAX_ENTRADAS_MAPA = 5000;
 const intentosPorIp = new Map<string, { intentos: number; desde: number }>();
+
+function podarEntradasExpiradas() {
+  const ahora = Date.now();
+  for (const [ip, entrada] of intentosPorIp) {
+    if (ahora - entrada.desde > VENTANA_MS) intentosPorIp.delete(ip);
+  }
+  // Última red de seguridad si por lo que sea la poda por expiración no alcanza a mantenerlo
+  // chico (ej. un ataque con miles de IPs distintas dentro de la misma ventana de 15 min):
+  // se descartan las entradas más viejas antes de seguir creciendo indefinidamente.
+  if (intentosPorIp.size > MAX_ENTRADAS_MAPA) {
+    const exceso = intentosPorIp.size - MAX_ENTRADAS_MAPA;
+    const claves = intentosPorIp.keys();
+    for (let i = 0; i < exceso; i++) {
+      const clave = claves.next().value;
+      if (clave !== undefined) intentosPorIp.delete(clave);
+    }
+  }
+}
 
 function ipBloqueada(ip: string): boolean {
   const entrada = intentosPorIp.get(ip);
@@ -31,6 +53,7 @@ function ipBloqueada(ip: string): boolean {
 }
 
 function registrarIntentoFallido(ip: string) {
+  podarEntradasExpiradas();
   const entrada = intentosPorIp.get(ip);
   if (!entrada || Date.now() - entrada.desde > VENTANA_MS) {
     intentosPorIp.set(ip, { intentos: 1, desde: Date.now() });

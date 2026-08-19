@@ -29,7 +29,7 @@ const HORA_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
  * humedad invertidas, modos inexistentes o umbrales de MQ135 sin sentido, y ese estado inválido se
  * reenviaba tal cual al ESP32 (que siempre gana en config, sin comparar versiones).
  */
-function validarConfiguracionZona(c: ConfiguracionZona): string | null {
+export function validarConfiguracionZona(c: ConfiguracionZona): string | null {
   if (!MODOS_VALIDOS.includes(c.modo)) return `Modo inválido: "${c.modo}". Debe ser AUTO, MANUAL o TEMPORIZADO.`;
   if (typeof c.humedadMinima !== 'number' || typeof c.humedadMaxima !== 'number' || Number.isNaN(c.humedadMinima) || Number.isNaN(c.humedadMaxima)) {
     return 'Humedad mínima/máxima deben ser números.';
@@ -127,8 +127,51 @@ configRouter.put('/:zona', requireRole('admin', 'operador'), async (req, res) =>
   res.json(configuracionCompleta);
 });
 
+const CLAVES_SENSORES = ['dht1', 'dht2', 'dht3', 'dht4', 'mq1', 'mq2'] as const;
+
+/**
+ * A diferencia de PUT /:zona, este endpoint no validaba nada ni dejaba rastro en sistema_logs —
+ * se podía escribir un intervalo negativo o sensoresHabilitados con forma arbitraria sin que
+ * quedara registrado quién lo hizo (requisito de auditoría explícito del usuario para toda
+ * escritura desde la web, ver README § Seguridad).
+ */
+export function validarConfiguracionSistema(intervaloConmutacionMinimoSeg: unknown, sensoresHabilitados: unknown): string | null {
+  if (intervaloConmutacionMinimoSeg !== undefined) {
+    if (typeof intervaloConmutacionMinimoSeg !== 'number' || !Number.isFinite(intervaloConmutacionMinimoSeg)) {
+      return 'intervaloConmutacionMinimoSeg debe ser un número.';
+    }
+    if (intervaloConmutacionMinimoSeg < 10 || intervaloConmutacionMinimoSeg > 3600) {
+      return 'intervaloConmutacionMinimoSeg debe estar entre 10 y 3600 segundos.';
+    }
+  }
+  if (sensoresHabilitados !== undefined) {
+    if (typeof sensoresHabilitados !== 'object' || sensoresHabilitados === null) {
+      return 'sensoresHabilitados debe ser un objeto.';
+    }
+    for (const clave of Object.keys(sensoresHabilitados)) {
+      if (!(CLAVES_SENSORES as readonly string[]).includes(clave)) {
+        return `sensoresHabilitados tiene una clave desconocida: "${clave}".`;
+      }
+    }
+    for (const clave of CLAVES_SENSORES) {
+      const valor = (sensoresHabilitados as Record<string, unknown>)[clave];
+      if (valor !== undefined && typeof valor !== 'boolean') {
+        return `sensoresHabilitados.${clave} debe ser booleano.`;
+      }
+    }
+  }
+  return null;
+}
+
 configRouter.put('/', requireRole('admin', 'operador'), async (req, res) => {
   const { intervaloConmutacionMinimoSeg, sensoresHabilitados } = req.body as Partial<ConfiguracionSistema>;
+
+  const errorValidacion = validarConfiguracionSistema(intervaloConmutacionMinimoSeg, sensoresHabilitados);
+  if (errorValidacion) return res.status(400).json({ error: errorValidacion });
+
+  const { rows: previas } = await pool.query('SELECT * FROM configuracion_sistema WHERE id = true');
+  const anterior = previas[0];
+
   await pool.query(
     `UPDATE configuracion_sistema SET
        intervalo_conmutacion_min_seg = COALESCE($1, intervalo_conmutacion_min_seg),
@@ -137,6 +180,22 @@ configRouter.put('/', requireRole('admin', 'operador'), async (req, res) => {
      WHERE id = true`,
     [intervaloConmutacionMinimoSeg ?? null, sensoresHabilitados ? JSON.stringify(sensoresHabilitados) : null]
   );
+
+  await pool.query(
+    `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email, usuario_ip, valor_anterior, valor_nuevo)
+     VALUES ('CONFIGURACION', 'INFO', $1, $2, $3, $4, $5)`,
+    [
+      'Cambio de configuración general del sistema',
+      req.usuario!.email,
+      (req.ip ?? '').replace('::ffff:', ''),
+      JSON.stringify({
+        intervaloConmutacionMinimoSeg: anterior?.intervalo_conmutacion_min_seg,
+        sensoresHabilitados: anterior?.sensores_habilitados,
+      }),
+      JSON.stringify({ intervaloConmutacionMinimoSeg, sensoresHabilitados }),
+    ]
+  );
+
   const configuracionCompleta = await obtenerConfiguracionCompleta();
   enviarConfiguracionADispositivo(configuracionCompleta);
   difundirANavegadores({ tipo: 'configuracion', datos: configuracionCompleta });
