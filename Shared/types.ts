@@ -115,6 +115,13 @@ export interface LogSistema {
   timestamp: string;
 }
 
+export interface RespuestaLogsPaginada {
+  logs: LogSistema[];
+  total: number;
+  pagina: number;
+  porPagina: number;
+}
+
 // ============================================================================
 // Comandos manuales enviados desde la web hacia el ESP32 (vía WebSocket)
 // ============================================================================

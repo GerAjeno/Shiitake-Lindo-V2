@@ -135,6 +135,8 @@ function CurvasZona({ v, datos, humMin, humMax, formatearEjeX }: { v: VisualZona
               <YAxis domain={["auto", "auto"]} stroke="#475569" fontSize={11} unit="°C" />
               <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "0.75rem", fontSize: "12px" }} labelFormatter={(t) => new Date(t).toLocaleString("es-CL", { timeZone: "America/Santiago", hour12: false })} />
               <Legend wrapperStyle={{ fontSize: "12px" }} />
+              <ReferenceLine y={20} stroke="#f59e0b" strokeDasharray="5 5" label={{ value: "20°C", fill: "#f59e0b", fontSize: 10 }} />
+              <ReferenceLine y={25} stroke="#f59e0b" strokeDasharray="5 5" label={{ value: "25°C", fill: "#f59e0b", fontSize: 10 }} />
               <Line type="monotone" dataKey={v.campoTemp} name={`Temp. ${v.nombre} (°C)`} stroke={v.colorHex} strokeWidth={2.5} dot={false} connectNulls={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -489,6 +491,8 @@ export default function HistoryPage() {
                 <XAxis dataKey="timestamp" type="number" domain={["dataMin", "dataMax"]} tickFormatter={formatearEjeX} stroke="#475569" fontSize={11} />
                 <YAxis domain={["auto", "auto"]} stroke="#475569" fontSize={11} unit="°C" />
                 <Legend wrapperStyle={{ fontSize: "12px" }} />
+                <ReferenceLine y={20} stroke="#f59e0b" strokeDasharray="5 5" label={{ value: "20°C", fill: "#f59e0b", fontSize: 10 }} />
+                <ReferenceLine y={25} stroke="#f59e0b" strokeDasharray="5 5" label={{ value: "25°C", fill: "#f59e0b", fontSize: 10 }} />
                 <Line type="monotone" dataKey="tempAtriles" name="Temp. Atriles (°C)" stroke="#06b6d4" strokeWidth={2.5} dot={false} />
                 <Line type="monotone" dataKey="tempDescanso" name="Temp. Descanso (°C)" stroke="#10b981" strokeWidth={2.5} dot={false} />
               </LineChart>

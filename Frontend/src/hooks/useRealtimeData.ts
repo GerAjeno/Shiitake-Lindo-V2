@@ -13,7 +13,6 @@ import type {
   MatrizSensores,
   ConfiguracionSistema,
   Alerta,
-  LogSistema,
   MensajeServidorACliente,
   TipoComandoManual,
 } from "@shared/types";
@@ -25,7 +24,6 @@ export function useRealtimeData() {
   const [sensores, setSensores] = useState<MatrizSensores | null>(null);
   const [configuracion, setConfiguracion] = useState<ConfiguracionSistema | null>(null);
   const [alertas, setAlertas] = useState<Alerta[]>([]);
-  const [sistemaLogs, setSistemaLogs] = useState<LogSistema[]>([]);
   const [conectado, setConectado] = useState(false);
   const [ultimaTelemetriaTs, setUltimaTelemetriaTs] = useState<number | null>(null);
 
@@ -36,11 +34,11 @@ export function useRealtimeData() {
   // promesa equivocada.
   const ackPendientesRef = useRef<Map<string, (ejecutado: boolean, error?: string) => void>>(new Map());
 
-  // Snapshot inicial por REST (config + alertas + logs no dependen del WS para la primera carga).
+  // Snapshot inicial por REST (config + alertas no dependen del WS para la primera carga).
+  // Los logs de auditoría se cargan aparte, paginados, directamente en /logs (ver LogsPage).
   useEffect(() => {
     apiFetch<ConfiguracionSistema>("/api/config").then(setConfiguracion).catch(console.error);
     apiFetch<Alerta[]>("/api/alertas").then(setAlertas).catch(console.error);
-    apiFetch<LogSistema[]>("/api/logs").then(setSistemaLogs).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -140,5 +138,5 @@ export function useRealtimeData() {
     });
   }, []);
 
-  return { actual, sensores, configuracion, alertas, sistemaLogs, conectado, espOnline, ultimaTelemetriaTs, enviarComando, resolverAlerta };
+  return { actual, sensores, configuracion, alertas, conectado, espOnline, ultimaTelemetriaTs, enviarComando, resolverAlerta };
 }
