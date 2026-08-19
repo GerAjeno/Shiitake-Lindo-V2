@@ -15,8 +15,12 @@ interface Props {
   actual?: TelemetriaActual | null;
 }
 
+const VERSION_VALIDA = /^[\w.-]+$/;
+
 export const FirmwareManager: React.FC<Props> = ({ actual }) => {
   const [archivo, setArchivo] = useState<File | null>(null);
+  const [version, setVersion] = useState("");
+  const [descripcion, setDescripcion] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const [mensaje, setMensaje] = useState<{ texto: string; tipo: "exito" | "error" | "info" } | null>(null);
 
@@ -37,16 +41,32 @@ export const FirmwareManager: React.FC<Props> = ({ actual }) => {
 
   const manejarSubida = async () => {
     if (!archivo) return;
+    const versionLimpia = version.trim();
+    if (!versionLimpia || !VERSION_VALIDA.test(versionLimpia)) {
+      setMensaje({ texto: "La versión es obligatoria y solo puede tener letras, números, puntos, guiones y guiones bajos (ej. 2.6.9, debe coincidir con FIRMWARE_VERSION en Config.h).", tipo: "error" });
+      return;
+    }
+
+    // Acción irreversible sobre un controlador de producción (relés de 220V, cultivo real): antes
+    // un solo clic ya empezaba a notificar al ESP32, sin ningún paso intermedio para confirmar que
+    // no fue un clic accidental ni que la versión escrita es la correcta.
+    const confirmado = window.confirm(
+      `¿Confirmás subir el firmware "${versionLimpia}" y notificar al controlador (versión activa hoy: ${versionActual})?\n\n` +
+        `El ESP32 validará la firma y, si todo sale bien, reiniciará solo en unos segundos.`
+    );
+    if (!confirmado) return;
+
     setSubiendo(true);
     setMensaje({ texto: "Subiendo firmware y firmando en el servidor...", tipo: "info" });
 
     try {
-      const version = `OTA_${new Date().toISOString().replace(/[:.]/g, "-")}`;
+      const headers: Record<string, string> = { "x-firmware-version": versionLimpia };
+      if (descripcion.trim()) headers["x-firmware-descripcion"] = encodeURIComponent(descripcion.trim());
 
       const res = await fetch("/api/firmware", {
         method: "POST",
         credentials: "include",
-        headers: { "x-firmware-version": version },
+        headers,
         body: archivo,
       });
       const data = await res.json();
@@ -59,6 +79,8 @@ export const FirmwareManager: React.FC<Props> = ({ actual }) => {
         tipo: "exito",
       });
       setArchivo(null);
+      setVersion("");
+      setDescripcion("");
     } catch (err: any) {
       setMensaje({ texto: err.message ?? "Error al subir el firmware.", tipo: "error" });
     } finally {
@@ -108,9 +130,29 @@ export const FirmwareManager: React.FC<Props> = ({ actual }) => {
         />
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-mono text-slate-600 dark:text-slate-400">Versión (debe coincidir con FIRMWARE_VERSION en Config.h)</span>
+          <input
+            type="text" value={version} onChange={(e) => setVersion(e.target.value)} disabled={subiendo}
+            placeholder="ej. 2.6.9"
+            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 disabled:opacity-50"
+          />
+        </label>
+        <label className="space-y-1.5 block">
+          <span className="text-xs font-mono text-slate-600 dark:text-slate-400">Descripción / changelog (opcional)</span>
+          <input
+            type="text" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={subiendo}
+            placeholder="ej. fix offset horario Chile"
+            maxLength={500}
+            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 disabled:opacity-50"
+          />
+        </label>
+      </div>
+
       <div className="flex justify-end">
         <button
-          onClick={manejarSubida} disabled={!archivo || subiendo}
+          onClick={manejarSubida} disabled={!archivo || !version.trim() || subiendo}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-5 py-2.5 rounded-xl text-xs disabled:opacity-50 transition-all"
         >
           {subiendo ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}

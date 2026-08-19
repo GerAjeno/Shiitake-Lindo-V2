@@ -97,11 +97,15 @@ export function useHistoricalData(rango: FiltroRangoTiempo, inicioCustom?: numbe
     totalRegistros: 0, rangoHorasTotal: 0, atriles: ESTADISTICAS_VACIAS_ZONA, descanso: ESTADISTICAS_VACIAS_ZONA,
   });
   const [cargando, setCargando] = useState(true);
+  // Antes un fallo de red acá solo se veía en la consola del navegador — el gráfico quedaba
+  // vacío/desactualizado sin ninguna explicación visible para quien está mirando la pantalla.
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
       setCargando(true);
+      setError(null);
       const ahora = Date.now();
       const desde = rango === "custom" && inicioCustom ? inicioCustom : inicioMillisPorRango(rango, ahora);
       const hasta = rango === "custom" && finCustom ? finCustom : ahora;
@@ -149,6 +153,7 @@ export function useHistoricalData(rango: FiltroRangoTiempo, inicioCustom?: numbe
         });
       } catch (err) {
         console.error("Error consultando historial:", err);
+        if (!cancelado) setError(err instanceof Error ? err.message : "No se pudo cargar el historial.");
       } finally {
         if (!cancelado) setCargando(false);
       }
@@ -157,5 +162,5 @@ export function useHistoricalData(rango: FiltroRangoTiempo, inicioCustom?: numbe
     return () => { cancelado = true; };
   }, [rango, inicioCustom, finCustom]);
 
-  return { datosHistoricos, estadisticas, cargando };
+  return { datosHistoricos, estadisticas, cargando, error };
 }

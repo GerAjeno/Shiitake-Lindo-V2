@@ -110,7 +110,12 @@ export default function UsuariosPage() {
     }
   };
 
-  const cambiarActivo = async (uid: string, activo: boolean) => {
+  const cambiarActivo = async (uid: string, activo: boolean, email: string) => {
+    // Suspender le corta el acceso a alguien de inmediato (incluida la posibilidad de que sea el
+    // único operador disponible en ese momento) — antes un solo clic en el switch ya lo hacía.
+    if (!activo && !window.confirm(`¿Confirmás suspender la cuenta de ${email}? No va a poder iniciar sesión hasta que la reactives.`)) {
+      return;
+    }
     setUidEnAccion(uid);
     setError(null);
     try {
@@ -293,7 +298,7 @@ export default function UsuariosPage() {
                           activo={u.activo}
                           disabled={esUnoMismo}
                           cargando={uidEnAccion === u.uid}
-                          onClick={() => cambiarActivo(u.uid, !u.activo)}
+                          onClick={() => cambiarActivo(u.uid, !u.activo, u.email)}
                         />
                       </td>
                       <td className="p-3 whitespace-nowrap text-slate-500">{formatearFecha(u.creadoEn)}</td>

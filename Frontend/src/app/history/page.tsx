@@ -12,7 +12,7 @@ import React, { useState, useRef } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, ReferenceLine, Legend,
 } from "recharts";
-import { Calendar, FileSpreadsheet, Database, Droplets, Thermometer, Zap, Activity, Clock, Wind } from "lucide-react";
+import { Calendar, FileSpreadsheet, Database, Droplets, Thermometer, Zap, Activity, Clock, Wind, CircleAlert } from "lucide-react";
 import ExcelJS from "exceljs";
 import { toPng } from "html-to-image";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -210,7 +210,7 @@ export default function HistoryPage() {
   const inicioCustom = new Date(fechaInicioStr).getTime();
   const finCustom = new Date(fechaFinStr).getTime();
 
-  const { datosHistoricos, estadisticas, cargando } = useHistoricalData(rango, inicioCustom, finCustom);
+  const { datosHistoricos, estadisticas, cargando, error } = useHistoricalData(rango, inicioCustom, finCustom);
   const { configuracion, conectado, espOnline } = useRealtimeData();
 
   const atHumMin = configuracion?.atriles.humedadMinima ?? 75;
@@ -416,7 +416,13 @@ export default function HistoryPage() {
             )}
           </div>
 
-          {cargando ? (
+          {error ? (
+            <div className="p-12 glass-panel flex flex-col items-center justify-center text-center border-rose-500/50 bg-rose-500/5">
+              <CircleAlert className="w-10 h-10 text-rose-500 mb-4" />
+              <h3 className="text-sm font-bold tracking-wider text-rose-700 dark:text-rose-300 uppercase font-mono">No se pudo cargar el historial</h3>
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-mono mt-2 max-w-md">{error}</p>
+            </div>
+          ) : cargando ? (
             <div className="p-12 glass-panel flex flex-col items-center justify-center text-center border-slate-800">
               <Activity className="w-10 h-10 text-emerald-400 animate-pulse mb-4" />
               <h3 className="text-sm font-bold tracking-wider text-slate-800 dark:text-slate-100 uppercase font-mono">Sincronizando historial...</h3>

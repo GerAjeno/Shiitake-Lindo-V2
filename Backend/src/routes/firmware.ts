@@ -25,7 +25,7 @@ fs.mkdirSync(FIRMWARE_DIR, { recursive: true });
 
 firmwareRouter.get('/', requireAuth, requireRole('admin'), async (_req, res) => {
   const { rows } = await pool.query(
-    'SELECT version, sha256, subido_por AS "subidoPor", subido_en AS "subidoEn" FROM firmwares ORDER BY subido_en DESC'
+    'SELECT version, descripcion, sha256, subido_por AS "subidoPor", subido_en AS "subidoEn" FROM firmwares ORDER BY subido_en DESC'
   );
   res.json(rows);
 });
@@ -50,6 +50,18 @@ firmwareRouter.post(
   express.raw({ type: '*/*', limit: '16mb' }),
   async (req, res) => {
     const version = String(req.headers['x-firmware-version'] ?? '').trim();
+    // Header opcional, URI-encoded desde el frontend (los headers HTTP no admiten de forma segura
+    // tildes/ñ/saltos de línea sin escapar) — antes no existía ningún lugar donde anotar qué trae
+    // cada .bin, así que meses después había que adivinarlo cruzando con git/memoria.
+    const descripcionRaw = req.headers['x-firmware-descripcion'];
+    let descripcion: string | null = null;
+    if (typeof descripcionRaw === 'string' && descripcionRaw.length > 0) {
+      try {
+        descripcion = decodeURIComponent(descripcionRaw).slice(0, 500);
+      } catch {
+        return res.status(400).json({ error: 'El header x-firmware-descripcion no es un URI-encoded válido.' });
+      }
+    }
     const buffer = req.body as Buffer;
     if (!version || !Buffer.isBuffer(buffer) || buffer.length === 0) {
       return res.status(400).json({ error: 'Falta la versión (header x-firmware-version) o el binario está vacío.' });
@@ -64,10 +76,10 @@ firmwareRouter.post(
     fs.writeFileSync(archivo, buffer);
 
     await pool.query(
-      `INSERT INTO firmwares (version, archivo, sha256, firma_ed25519, subido_por)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (version) DO UPDATE SET archivo = $2, sha256 = $3, firma_ed25519 = $4, subido_por = $5, subido_en = now()`,
-      [version, archivo, sha256, firma, req.usuario!.email]
+      `INSERT INTO firmwares (version, archivo, sha256, firma_ed25519, subido_por, descripcion)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (version) DO UPDATE SET archivo = $2, sha256 = $3, firma_ed25519 = $4, subido_por = $5, subido_en = now(), descripcion = $6`,
+      [version, archivo, sha256, firma, req.usuario!.email, descripcion]
     );
 
     // Conservar como máximo las últimas N versiones (archivo + fila en DB).
@@ -82,7 +94,10 @@ firmwareRouter.post(
 
     await pool.query(
       `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email) VALUES ('OTA', 'INFO', $1, $2)`,
-      [`Firmware ${version} subido (sha256 ${sha256.slice(0, 12)}...)`, req.usuario!.email]
+      [
+        `Firmware ${version} subido (sha256 ${sha256.slice(0, 12)}...)` + (descripcion ? ` — ${descripcion}` : ''),
+        req.usuario!.email,
+      ]
     );
 
     const url = `${PUBLIC_BASE_URL}/api/firmware/${version}/download`;
