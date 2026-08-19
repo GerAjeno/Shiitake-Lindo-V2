@@ -2,13 +2,14 @@
 
 /**
  * @file TemporizadorConfig.tsx
- * @description Editor visual de bloques horarios para el modo TEMPORIZADO — agregar, eliminar y
- * alternar habilitación de rangos, con indicación de trasnoche (cruce de medianoche). Solo edita
- * el estado local recibido por props; el guardado real ocurre al presionar "Guardar" en la página.
+ * @description Editor visual de bloques horarios para el modo TEMPORIZADO — agregar, editar,
+ * eliminar y alternar habilitación de rangos, con indicación de trasnoche (cruce de medianoche) y
+ * aviso de solapamiento entre bloques activos. Solo edita el estado local recibido por props; el
+ * guardado real ocurre al presionar "Guardar" en la página.
  */
 
 import React, { useState } from "react";
-import { Clock, Plus, Trash2, Moon, Sun, CheckCircle2, Circle } from "lucide-react";
+import { Clock, Plus, Trash2, Pencil, X, Moon, Sun, CheckCircle2, Circle, AlertTriangle } from "lucide-react";
 import type { RangoHorario } from "@shared/types";
 
 interface Props {
@@ -19,22 +20,71 @@ interface Props {
   onCambiarRangos: (nuevosRangos: RangoHorario[]) => void;
 }
 
+function aMinutos(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// Un rango que cruza medianoche (ej. 22:00 -> 06:00) ocupa dos tramos del día: [22:00, 24:00) y
+// [00:00, 06:00). Partirlo así permite comparar solapamiento con la misma lógica sin importar si
+// alguno de los dos bloques trasnocha o no.
+function segmentosDelDia(inicio: number, fin: number): [number, number][] {
+  if (inicio < fin) return [[inicio, fin]];
+  if (inicio > fin) return [[inicio, 1440], [0, fin]];
+  return [];
+}
+
+function seSuperponen(aIni: number, aFin: number, bIni: number, bFin: number): boolean {
+  const segA = segmentosDelDia(aIni, aFin);
+  const segB = segmentosDelDia(bIni, bFin);
+  return segA.some(([s1, e1]) => segB.some(([s2, e2]) => s1 < e2 && s2 < e1));
+}
+
 export function TemporizadorConfig({ nombreZona, colorTema, rangos = [], soloLectura, onCambiarRangos }: Props) {
   const [horaInicio, setHoraInicio] = useState("08:00");
   const [horaFin, setHoraFin] = useState("10:00");
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const colorBorde = colorTema === "cyan" ? "border-cyan-500/30 bg-cyan-500/5 dark:bg-cyan-950/20" : "border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20";
   const colorTexto = colorTema === "cyan" ? "text-cyan-600 dark:text-cyan-400" : "text-emerald-600 dark:text-emerald-400";
   const colorBoton = colorTema === "cyan" ? "bg-cyan-500 hover:bg-cyan-400 text-slate-950" : "bg-emerald-500 hover:bg-emerald-400 text-slate-950";
+  // Clases completas y literales (no armadas con .replace() en runtime) para que el JIT de
+  // Tailwind las detecte al escanear el código fuente — una clase construida dinámicamente no
+  // aparece en el CSS generado aunque el valor final sea correcto.
+  const colorBordeEdicion = colorTema === "cyan" ? "border-cyan-500" : "border-emerald-500";
 
-  const esTrasnoche = (ini: string, fin: string) => {
-    const [hIni, mIni] = ini.split(":").map(Number);
-    const [hFin, mFin] = fin.split(":").map(Number);
-    return hIni * 60 + mIni > hFin * 60 + mFin;
+  const esTrasnoche = (ini: string, fin: string) => aMinutos(ini) > aMinutos(fin);
+
+  // Un bloque se marca en amarillo si se superpone con otro bloque activo — no se bloquea el
+  // guardado (dos bloques solapados no rompen nada, el control simplemente queda ON en la unión de
+  // ambos), pero suele ser un error de tipeo que vale la pena señalar.
+  const idsConSolapamiento = new Set(
+    rangos
+      .filter((r) => r.habilitado)
+      .filter((r) =>
+        rangos.some(
+          (otro) => otro.id !== r.id && otro.habilitado && seSuperponen(aMinutos(r.inicio), aMinutos(r.fin), aMinutos(otro.inicio), aMinutos(otro.fin))
+        )
+      )
+      .map((r) => r.id)
+  );
+
+  const cancelarEdicion = () => {
+    setEditandoId(null);
+    setHoraInicio("08:00");
+    setHoraFin("10:00");
+    setError(null);
   };
 
-  const agregarRango = () => {
+  const editarRango = (rango: RangoHorario) => {
+    setEditandoId(rango.id);
+    setHoraInicio(rango.inicio);
+    setHoraFin(rango.fin);
+    setError(null);
+  };
+
+  const guardarRango = () => {
     setError(null);
     if (!horaInicio || !horaFin) {
       setError("Debe especificar hora de inicio y hora de fin.");
@@ -44,11 +94,19 @@ export function TemporizadorConfig({ nombreZona, colorTema, rangos = [], soloLec
       setError("La hora de inicio y fin no pueden ser idénticas.");
       return;
     }
-    const nuevoRango: RangoHorario = { id: `rango_${Date.now()}`, inicio: horaInicio, fin: horaFin, habilitado: true };
-    onCambiarRangos([...rangos, nuevoRango]);
+    if (editandoId) {
+      onCambiarRangos(rangos.map((r) => (r.id === editandoId ? { ...r, inicio: horaInicio, fin: horaFin } : r)));
+    } else {
+      const nuevoRango: RangoHorario = { id: `rango_${Date.now()}`, inicio: horaInicio, fin: horaFin, habilitado: true };
+      onCambiarRangos([...rangos, nuevoRango]);
+    }
+    cancelarEdicion();
   };
 
-  const eliminarRango = (id: string) => onCambiarRangos(rangos.filter((r) => r.id !== id));
+  const eliminarRango = (id: string) => {
+    onCambiarRangos(rangos.filter((r) => r.id !== id));
+    if (editandoId === id) cancelarEdicion();
+  };
   const alternarHabilitado = (id: string) => onCambiarRangos(rangos.map((r) => (r.id === id ? { ...r, habilitado: !r.habilitado } : r)));
 
   return (
@@ -72,11 +130,14 @@ export function TemporizadorConfig({ nombreZona, colorTema, rangos = [], soloLec
         ) : (
           rangos.map((rango) => {
             const trasnoche = esTrasnoche(rango.inicio, rango.fin);
+            const solapado = idsConSolapamiento.has(rango.id);
             return (
               <div
                 key={rango.id}
                 className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
-                  rango.habilitado
+                  editandoId === rango.id
+                    ? `bg-white dark:bg-slate-900/80 shadow-md ${colorBordeEdicion}`
+                    : rango.habilitado
                     ? "bg-white dark:bg-slate-900/80 border-slate-300 dark:border-slate-700 shadow-md"
                     : "bg-slate-100/50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800/60 opacity-60"
                 }`}
@@ -105,6 +166,11 @@ export function TemporizadorConfig({ nombreZona, colorTema, rangos = [], soloLec
                           <Sun className="w-3 h-3 text-amber-600 dark:text-amber-400" /> Mismo día
                         </span>
                       )}
+                      {solapado && (
+                        <span className="inline-flex items-center gap-1 text-[10px] bg-yellow-500/10 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded-full border border-yellow-500/30 font-sans font-medium" title="Se superpone con otro bloque activo">
+                          <AlertTriangle className="w-3 h-3 text-yellow-600 dark:text-yellow-400" /> Se solapa
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] font-mono text-slate-600 dark:text-slate-400">
                       Estado: <strong className={rango.habilitado ? colorTexto : "text-slate-500"}>{rango.habilitado ? "ACTIVO" : "DESHABILITADO"}</strong>
@@ -113,14 +179,24 @@ export function TemporizadorConfig({ nombreZona, colorTema, rangos = [], soloLec
                 </div>
 
                 {!soloLectura && (
-                  <button
-                    type="button"
-                    onClick={() => eliminarRango(rango.id)}
-                    className="p-2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
-                    title="Eliminar bloque horario"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => editarRango(rango)}
+                      className="p-2 text-slate-400 dark:text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all"
+                      title="Editar horario del bloque"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => eliminarRango(rango.id)}
+                      className="p-2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+                      title="Eliminar bloque horario"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 )}
               </div>
             );
@@ -130,7 +206,9 @@ export function TemporizadorConfig({ nombreZona, colorTema, rangos = [], soloLec
 
       {!soloLectura && (
         <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-3">
-          <label className="text-xs font-mono uppercase text-slate-700 dark:text-slate-300 block font-bold">➕ Agregar Nuevo Bloque Horario (24 Hrs / Militar)</label>
+          <label className="text-xs font-mono uppercase text-slate-700 dark:text-slate-300 block font-bold">
+            {editandoId ? "✏️ Editando Bloque Horario" : "➕ Agregar Nuevo Bloque Horario"}
+          </label>
           {error && (
             <div className="p-2.5 bg-rose-500/10 dark:bg-rose-950/40 border border-rose-500/40 rounded-lg text-rose-700 dark:text-rose-300 text-xs font-mono">⚠️ {error}</div>
           )}
@@ -138,62 +216,43 @@ export function TemporizadorConfig({ nombreZona, colorTema, rangos = [], soloLec
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-center">
               <div className="flex items-center justify-between bg-white dark:bg-slate-900/90 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-800 shadow-sm min-w-0">
                 <span className="text-xs font-mono text-slate-600 dark:text-slate-400 font-bold shrink-0">Inicio:</span>
-                <div className="flex items-center gap-1 font-mono text-xs sm:text-sm">
-                  <select
-                    value={horaInicio.split(":")[0] || "08"}
-                    onChange={(e) => setHoraInicio(`${e.target.value}:${horaInicio.split(":")[1] || "00"}`)}
-                    className="bg-transparent text-slate-800 dark:text-slate-100 font-bold focus:outline-none cursor-pointer p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                  >
-                    {Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0")).map((h) => (
-                      <option key={`ini-h-${h}`} value={h} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">{h}</option>
-                    ))}
-                  </select>
-                  <span className="text-slate-400 font-bold">:</span>
-                  <select
-                    value={horaInicio.split(":")[1] || "00"}
-                    onChange={(e) => setHoraInicio(`${horaInicio.split(":")[0] || "08"}:${e.target.value}`)}
-                    className="bg-transparent text-slate-800 dark:text-slate-100 font-bold focus:outline-none cursor-pointer p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                  >
-                    {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0")).map((m) => (
-                      <option key={`ini-m-${m}`} value={m} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">{m}</option>
-                    ))}
-                  </select>
-                  <span className="text-[10px] font-mono text-slate-400 ml-0.5">hrs</span>
-                </div>
+                <input
+                  type="time"
+                  value={horaInicio}
+                  onChange={(e) => setHoraInicio(e.target.value)}
+                  className="bg-transparent text-slate-800 dark:text-slate-100 font-bold font-mono focus:outline-none cursor-pointer p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 [color-scheme:light] dark:[color-scheme:dark]"
+                />
               </div>
               <div className="flex items-center justify-between bg-white dark:bg-slate-900/90 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-800 shadow-sm min-w-0">
                 <span className="text-xs font-mono text-slate-600 dark:text-slate-400 font-bold shrink-0">Fin:</span>
-                <div className="flex items-center gap-1 font-mono text-xs sm:text-sm">
-                  <select
-                    value={horaFin.split(":")[0] || "10"}
-                    onChange={(e) => setHoraFin(`${e.target.value}:${horaFin.split(":")[1] || "00"}`)}
-                    className="bg-transparent text-slate-800 dark:text-slate-100 font-bold focus:outline-none cursor-pointer p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                  >
-                    {Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0")).map((h) => (
-                      <option key={`fin-h-${h}`} value={h} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">{h}</option>
-                    ))}
-                  </select>
-                  <span className="text-slate-400 font-bold">:</span>
-                  <select
-                    value={horaFin.split(":")[1] || "00"}
-                    onChange={(e) => setHoraFin(`${horaFin.split(":")[0] || "10"}:${e.target.value}`)}
-                    className="bg-transparent text-slate-800 dark:text-slate-100 font-bold focus:outline-none cursor-pointer p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                  >
-                    {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0")).map((m) => (
-                      <option key={`fin-m-${m}`} value={m} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">{m}</option>
-                    ))}
-                  </select>
-                  <span className="text-[10px] font-mono text-slate-400 ml-0.5">hrs</span>
-                </div>
+                <input
+                  type="time"
+                  value={horaFin}
+                  onChange={(e) => setHoraFin(e.target.value)}
+                  className="bg-transparent text-slate-800 dark:text-slate-100 font-bold font-mono focus:outline-none cursor-pointer p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 [color-scheme:light] dark:[color-scheme:dark]"
+                />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={agregarRango}
-              className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold font-mono text-xs shadow-lg transition-all ${colorBoton}`}
-            >
-              <Plus className="w-4 h-4 shrink-0" /> <span>Añadir Bloque Horario</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={guardarRango}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold font-mono text-xs shadow-lg transition-all ${colorBoton}`}
+              >
+                {editandoId ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <Plus className="w-4 h-4 shrink-0" />}
+                <span>{editandoId ? "Guardar Cambios" : "Añadir Bloque Horario"}</span>
+              </button>
+              {editandoId && (
+                <button
+                  type="button"
+                  onClick={cancelarEdicion}
+                  className="p-3 rounded-xl border border-slate-300 dark:border-slate-800 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                  title="Cancelar edición"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
