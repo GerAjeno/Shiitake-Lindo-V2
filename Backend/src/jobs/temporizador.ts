@@ -17,7 +17,7 @@ import type { ModoControl, NombreZona, RangoHorario } from '../shared/types';
 const INTERVALO_EVALUACION_MS = 30 * 1000;
 const ZONA_HORARIA = 'America/Santiago';
 
-function minutosDelDiaEnSantiago(ahora: Date): number {
+export function minutosDelDiaEnSantiago(ahora: Date): number {
   const partes = new Intl.DateTimeFormat('en-US', {
     timeZone: ZONA_HORARIA, hour: '2-digit', minute: '2-digit', hour12: false,
   }).formatToParts(ahora);
@@ -26,19 +26,19 @@ function minutosDelDiaEnSantiago(ahora: Date): number {
   return (hora % 24) * 60 + minuto; // formatToParts da "24" a medianoche en vez de "00"
 }
 
-function aMinutosDelDia(hhmm: string): number {
+export function aMinutosDelDia(hhmm: string): number {
   const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(hhmm);
   if (!m) return -1;
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
 /** Soporta bloques que cruzan medianoche (ej. 22:00 -> 06:00). */
-function minutoEnVentana(minutoActual: number, inicio: number, fin: number): boolean {
+export function minutoEnVentana(minutoActual: number, inicio: number, fin: number): boolean {
   if (inicio <= fin) return minutoActual >= inicio && minutoActual < fin;
   return minutoActual >= inicio || minutoActual < fin;
 }
 
-function debeEstarEncendido(rangos: RangoHorario[], minutoActual: number): boolean {
+export function debeEstarEncendido(rangos: RangoHorario[], minutoActual: number): boolean {
   return rangos.some((r) => {
     if (!r.habilitado) return false;
     const inicio = aMinutosDelDia(r.inicio);
