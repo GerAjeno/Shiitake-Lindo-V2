@@ -1,13 +1,15 @@
 /**
  * Job periódico: agrega la tabla `historial` (30s) en buckets de 5 minutos dentro de
- * `historial_agregado_5min` (retención indefinida, usada para rangos largos), y limpia
- * `historial_crudo` (5s) más antiguo que 90 días.
+ * `historial_agregado_5min` (retención indefinida, usada para rangos largos), limpia
+ * `historial_crudo` (5s) más antiguo que 90 días, y limpia `historial` (30s) más antiguo que 3
+ * años (retención acordada en el plan de migración, ver docs/PLAN_MIGRACION.md).
  */
 import { pool } from '../db/pool';
 
 const INTERVALO_AGREGACION_MS = 5 * 60 * 1000;
 const INTERVALO_LIMPIEZA_MS = 6 * 60 * 60 * 1000;
 const RETENCION_CRUDO_DIAS = 90;
+const RETENCION_HISTORIAL_DIAS = 3 * 365;
 
 async function agregarUltimoBucket() {
   await pool.query(`
@@ -39,8 +41,19 @@ async function limpiarHistorialCrudo() {
   if (rowCount) console.log(`[JOB] Limpieza historial_crudo: ${rowCount} filas > ${RETENCION_CRUDO_DIAS} días eliminadas.`);
 }
 
+// Seguro purgar sin perder resolución útil: /api/historial ya deja de leer de `historial` (30s) a
+// partir de los 7 días de rango y pasa a `historial_agregado_5min` (retención indefinida) — nada
+// que consulte rangos largos depende de estas filas crudas de 30s una vez pasados los 3 años.
+async function limpiarHistorial() {
+  const { rowCount } = await pool.query(
+    `DELETE FROM historial WHERE ts < now() - interval '${RETENCION_HISTORIAL_DIAS} days'`
+  );
+  if (rowCount) console.log(`[JOB] Limpieza historial: ${rowCount} filas > ${RETENCION_HISTORIAL_DIAS} días eliminadas.`);
+}
+
 export function iniciarJobsPeriodicos() {
   setInterval(() => agregarUltimoBucket().catch((e) => console.error('[JOB] Error agregando 5min:', e)), INTERVALO_AGREGACION_MS);
   setInterval(() => limpiarHistorialCrudo().catch((e) => console.error('[JOB] Error limpiando crudo:', e)), INTERVALO_LIMPIEZA_MS);
-  console.log('[JOB] Agregación 5min y limpieza de históricos crudos programadas.');
+  setInterval(() => limpiarHistorial().catch((e) => console.error('[JOB] Error limpiando historial:', e)), INTERVALO_LIMPIEZA_MS);
+  console.log('[JOB] Agregación 5min y limpieza de históricos (crudo 90d, historial 3a) programadas.');
 }

@@ -55,6 +55,15 @@ services:
       # accesibles a este contenedor de larga duración.
       - ./secrets/ota-signing-key.pem:/run/secrets/ota-signing-key.pem:ro
       - firmware_data:/data/firmware
+    # Antes solo postgres tenía healthcheck: Caddy podía seguir mandando tráfico a un backend
+    # "arriba pero colgado" (proceso vivo, pero sin responder) sin que Docker se enterara ni lo
+    # reiniciara — `restart: unless-stopped` no ayuda si el proceso nunca llega a morir solo.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3001/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   frontend:
     <<: *logging-por-defecto
@@ -64,6 +73,12 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   caddy:
     <<: *logging-por-defecto
@@ -73,8 +88,10 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
 
   cloudflared:
     <<: *logging-por-defecto

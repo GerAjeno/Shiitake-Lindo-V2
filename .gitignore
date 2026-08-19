@@ -34,6 +34,8 @@ infra/postgres/data/
 # Build artifacts
 *.tsbuildinfo
 
-# Copia local de Shared/ generada por Backend/package.json (predev/prebuild) para que tsc
-# no falle con TS6059 (rootDir) — la fuente de verdad sigue siendo /Shared en la raíz.
-Backend/src/shared/
+# Backend/src/shared es un symlink a ../../Shared (ver Backend/package.json predev/prebuild) para
+# que tsc no falle con TS6059 (rootDir) sin duplicar el archivo — la fuente de verdad sigue siendo
+# /Shared en la raíz. Sin la barra final: un patrón "shared/" no matchea un symlink con ese nombre,
+# solo un directorio real, y quedaba sin ignorar.
+Backend/src/shared
