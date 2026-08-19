@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { FileText, Filter, Search, Activity, Cpu, Wifi, ShieldAlert, CheckCircle2, Sliders, ChevronLeft, ChevronRight, CalendarDays, X } from "lucide-react";
+import { FileText, Filter, Search, Activity, Cpu, Wifi, ShieldAlert, CheckCircle2, Sliders, ChevronLeft, ChevronRight, CalendarDays, X, Download } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -93,20 +93,36 @@ export default function LogsPage() {
   const [porPagina, setPorPagina] = useState<number>(30);
   const [categoriasSeleccionadas, setCategoriasSeleccionadas] = useState<CategoriaFiltro[]>([]);
   const [fecha, setFecha] = useState(""); // "" = sin filtro de fecha, si no "YYYY-MM-DD"
-  const [busqueda, setBusqueda] = useState("");
+  const [busquedaInput, setBusquedaInput] = useState(""); // lo que el usuario está tipeando
+  const [busqueda, setBusqueda] = useState(""); // versión con debounce, la que realmente se manda al servidor
+
+  // Espera 400ms sin tipeo antes de disparar la búsqueda contra el servidor — buscar en el
+  // servidor (no solo en la página cargada) significa que cada tecla dispararía una consulta a
+  // Postgres si no se agrupan los cambios rápidos en una sola.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPagina(1);
+      setBusqueda(busquedaInput.trim());
+    }, 400);
+    return () => clearTimeout(t);
+  }, [busquedaInput]);
+
+  function construirQuery(): URLSearchParams {
+    const params = new URLSearchParams();
+    params.set("pagina", String(pagina));
+    params.set("porPagina", String(porPagina));
+    if (categoriasSeleccionadas.length > 0) params.set("categorias", categoriasSeleccionadas.join(","));
+    if (fecha) params.set("fecha", fecha);
+    if (busqueda) params.set("busqueda", busqueda);
+    return params;
+  }
 
   useEffect(() => {
     let cancelado = false;
     setCargando(true);
     setError(null);
 
-    const params = new URLSearchParams();
-    params.set("pagina", String(pagina));
-    params.set("porPagina", String(porPagina));
-    if (categoriasSeleccionadas.length > 0) params.set("categorias", categoriasSeleccionadas.join(","));
-    if (fecha) params.set("fecha", fecha);
-
-    apiFetch<RespuestaLogsPaginada>(`/api/logs?${params.toString()}`)
+    apiFetch<RespuestaLogsPaginada>(`/api/logs?${construirQuery().toString()}`)
       .then((respuesta) => {
         if (cancelado) return;
         setLogs(respuesta.logs);
@@ -122,7 +138,8 @@ export default function LogsPage() {
     return () => {
       cancelado = true;
     };
-  }, [pagina, porPagina, categoriasSeleccionadas, fecha]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagina, porPagina, categoriasSeleccionadas, fecha, busqueda]);
 
   function alternarCategoria(cat: CategoriaFiltro) {
     setPagina(1);
@@ -130,14 +147,7 @@ export default function LogsPage() {
   }
 
   const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
-
-  // La búsqueda de texto filtra solo dentro de la página ya cargada (los logs no se traen todos
-  // a la vez); para buscar en otro rango hay que combinarla con el filtro de fecha/categoría.
-  const logsFiltrados = logs.filter((item) => {
-    if (busqueda.trim() === "") return true;
-    const b = busqueda.toLowerCase();
-    return item.mensaje?.toLowerCase().includes(b) || item.categoria?.toLowerCase().includes(b) || item.usuarioEmail?.toLowerCase().includes(b);
-  });
+  const urlExportar = `/api/logs/export?${construirQuery().toString()}`;
 
   return (
     <div className="min-h-screen flex bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300">
@@ -187,8 +197,8 @@ export default function LogsPage() {
                 <input
                   type="text"
                   placeholder="Buscar en logs..."
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
+                  value={busquedaInput}
+                  onChange={(e) => setBusquedaInput(e.target.value)}
                   className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
                 />
               </div>
@@ -207,6 +217,14 @@ export default function LogsPage() {
                   </option>
                 ))}
               </select>
+
+              <a
+                href={urlExportar}
+                className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 hover:border-emerald-500/50 hover:text-emerald-300 transition-colors shrink-0"
+                title="Exportar a CSV los logs que coinciden con los filtros actuales"
+              >
+                <Download className="w-3.5 h-3.5" /> Exportar CSV
+              </a>
             </div>
           </div>
 
@@ -253,14 +271,14 @@ export default function LogsPage() {
               <div className="text-center py-16 bg-slate-900/30 rounded-2xl border border-dashed border-slate-800/80">
                 <p className="text-sm font-medium text-slate-400">Cargando logs...</p>
               </div>
-            ) : logsFiltrados.length === 0 ? (
+            ) : logs.length === 0 ? (
               <div className="text-center py-16 bg-slate-900/30 rounded-2xl border border-dashed border-slate-800/80">
                 <CheckCircle2 className="w-12 h-12 text-slate-600 mx-auto mb-3 stroke-[1.5]" />
                 <p className="text-sm font-medium text-slate-300">No hay registros de logs que coincidan</p>
                 <p className="text-xs text-slate-500 mt-1">Los eventos automáticos y cambios de estado aparecerán aquí.</p>
               </div>
             ) : (
-              logsFiltrados.map((log) => (
+              logs.map((log) => (
                 <div
                   key={log.id}
                   className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-slate-900/50 hover:bg-slate-900/80 rounded-xl border border-slate-800/80 transition shadow-sm"
