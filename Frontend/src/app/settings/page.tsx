@@ -8,8 +8,8 @@
  * los controles para "lectura"). El panel OTA vive arriba, visible solo para admin.
  */
 
-import React, { useEffect, useState } from "react";
-import { Save, Check, RefreshCw, Clock, Droplets, Sliders as SlidersIcon, ShieldAlert, CircleAlert, KeyRound, Download } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Save, Check, RefreshCw, Clock, Droplets, Sliders as SlidersIcon, ShieldAlert, CircleAlert, KeyRound, Download, Upload } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -78,6 +78,92 @@ function construirCsvHorarios(atriles: ConfiguracionZona, descanso: Configuracio
   }
   const lineas = [encabezado, ...filas].map((fila) => fila.map(csvEscaparCelda).join(","));
   return "﻿" + lineas.join("\r\n");
+}
+
+const HORA_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const NOMBRE_A_ZONA: Record<string, "atriles" | "descanso"> = {
+  atriles: "atriles",
+  descanso: "descanso",
+};
+
+function normalizarCabecera(celda: string): string {
+  return celda.trim().toLowerCase();
+}
+
+function parsearLineaCsv(linea: string): string[] {
+  return linea.split(",").map((c) => c.trim().replace(/^"(.*)"$/, "$1").trim());
+}
+
+/** true si el valor de la columna Habilitado debe interpretarse como deshabilitado — todo lo demás
+ * (incluida la columna vacía/ausente) se toma como habilitado, para que agregar un bloque nuevo en
+ * el archivo sea tan simple como escribir una línea con solo zona/inicio/fin. */
+function esDeshabilitado(valor: string | undefined): boolean {
+  const v = (valor ?? "").trim().toLowerCase();
+  return v === "no" || v === "false" || v === "0";
+}
+
+interface ResultadoImportacion {
+  atriles?: RangoHorario[];
+  descanso?: RangoHorario[];
+  advertencias: string[];
+}
+
+/**
+ * Parsea el CSV de horarios (mismo formato que construirCsvHorarios: columnas Zona/Inicio/Fin y
+ * opcionalmente ID/Habilitado, en cualquier orden — así un archivo exportado se puede re-importar
+ * tal cual). Solo devuelve las zonas presentes en el archivo; una zona ausente queda intacta.
+ * Los bloques de una zona se reemplazan por completo por los del archivo (no se fusionan con los
+ * existentes), y las líneas inválidas se saltean en vez de abortar toda la importación.
+ */
+function parsearCsvHorarios(texto: string): ResultadoImportacion {
+  const lineas = texto.replace(/^﻿/, "").split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  const advertencias: string[] = [];
+  if (lineas.length === 0) return { advertencias: ["El archivo está vacío."] };
+
+  const cabecera = parsearLineaCsv(lineas[0]).map(normalizarCabecera);
+  const idxZona = cabecera.indexOf("zona");
+  const idxInicio = cabecera.indexOf("inicio");
+  const idxFin = cabecera.indexOf("fin");
+  const idxHabilitado = cabecera.indexOf("habilitado");
+  if (idxZona < 0 || idxInicio < 0 || idxFin < 0) {
+    return { advertencias: ['La primera línea debe ser el encabezado con al menos las columnas "Zona,Inicio,Fin" (ver botón Exportar Horario para un ejemplo).'] };
+  }
+
+  const porZona: Record<"atriles" | "descanso", RangoHorario[]> = { atriles: [], descanso: [] };
+  const zonasPresentes = new Set<"atriles" | "descanso">();
+
+  lineas.slice(1).forEach((linea, i) => {
+    const numeroLinea = i + 2; // +1 por el encabezado, +1 porque las líneas se cuentan desde 1
+    const celdas = parsearLineaCsv(linea);
+    const nombreZona = normalizarCabecera(celdas[idxZona] ?? "");
+    const zona = NOMBRE_A_ZONA[nombreZona];
+    if (!zona) {
+      advertencias.push(`Línea ${numeroLinea}: zona "${celdas[idxZona] ?? ""}" no reconocida (debe ser "Atriles" o "Descanso"), se ignoró.`);
+      return;
+    }
+    const inicio = celdas[idxInicio] ?? "";
+    const fin = celdas[idxFin] ?? "";
+    if (!HORA_REGEX.test(inicio) || !HORA_REGEX.test(fin)) {
+      advertencias.push(`Línea ${numeroLinea}: horario "${inicio}"-"${fin}" inválido (debe ser HH:mm), se ignoró.`);
+      return;
+    }
+    zonasPresentes.add(zona);
+    if (porZona[zona].length >= 40) {
+      advertencias.push(`Línea ${numeroLinea}: la zona ${nombreZona} ya llegó a 40 bloques (el máximo del firmware), se ignoró el resto.`);
+      return;
+    }
+    porZona[zona].push({
+      id: `rango_${Date.now()}_${porZona[zona].length}`,
+      inicio,
+      fin,
+      habilitado: !esDeshabilitado(idxHabilitado >= 0 ? celdas[idxHabilitado] : undefined),
+    });
+  });
+
+  const resultado: ResultadoImportacion = { advertencias };
+  if (zonasPresentes.has("atriles")) resultado.atriles = porZona.atriles;
+  if (zonasPresentes.has("descanso")) resultado.descanso = porZona.descanso;
+  return resultado;
 }
 
 function PillModo({ activo, colorActivo, onClick, disabled, children }: { activo: boolean; colorActivo: string; onClick: () => void; disabled: boolean; children: React.ReactNode }) {
@@ -331,6 +417,8 @@ export default function SettingsPage() {
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null);
+  const [mensajeImportacion, setMensajeImportacion] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+  const inputImportarRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (configuracion) {
@@ -342,6 +430,7 @@ export default function SettingsPage() {
   const guardarTodo = async () => {
     if (!localAtriles || !localDescanso) return;
     setErrorValidacion(null);
+    setMensajeImportacion(null);
 
     if (localAtriles.humedadMaxima - localAtriles.humedadMinima <= 5) {
       setErrorValidacion(`Protección Electromecánica (Atriles): la diferencia entre apagar (${localAtriles.humedadMaxima}%) y encender (${localAtriles.humedadMinima}%) es de solo ${localAtriles.humedadMaxima - localAtriles.humedadMinima}%. Debe mantener más de 5 puntos porcentuales de separación.`);
@@ -396,8 +485,53 @@ export default function SettingsPage() {
     window.URL.revokeObjectURL(url);
   };
 
+  /**
+   * Importa horarios desde un CSV (mismo formato de Exportar Horario, ver parsearCsvHorarios).
+   * Solo carga los cambios en el estado local — igual que editar un bloque a mano en
+   * TemporizadorConfig, hace falta apretar "Guardar" para que se aplique de verdad. Así el usuario
+   * puede revisar el resultado (y el mensaje de advertencias, si hubo líneas inválidas) antes de
+   * que se le mande al controlador.
+   */
+  const manejarArchivoImportado = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo si se corrige y reintenta
+    if (!archivo) return;
+    setMensajeImportacion(null);
+
+    let texto: string;
+    try {
+      texto = await archivo.text();
+    } catch {
+      setMensajeImportacion({ tipo: "error", texto: "No se pudo leer el archivo." });
+      return;
+    }
+
+    const resultado = parsearCsvHorarios(texto);
+    if (!resultado.atriles && !resultado.descanso) {
+      setMensajeImportacion({
+        tipo: "error",
+        texto: resultado.advertencias.length > 0 ? resultado.advertencias.join(" ") : "El archivo no tiene bloques horarios válidos.",
+      });
+      return;
+    }
+
+    if (resultado.atriles && localAtriles) setLocalAtriles({ ...localAtriles, rangosHorarios: resultado.atriles });
+    if (resultado.descanso && localDescanso) setLocalDescanso({ ...localDescanso, rangosHorarios: resultado.descanso });
+
+    const zonasImportadas = [
+      resultado.atriles ? `Atriles (${resultado.atriles.length})` : null,
+      resultado.descanso ? `Descanso (${resultado.descanso.length})` : null,
+    ].filter(Boolean).join(", ");
+    const resumen = `Horario importado: ${zonasImportadas}. Revisá los bloques abajo y apretá "Guardar" para aplicarlos.`;
+    setMensajeImportacion({
+      tipo: resultado.advertencias.length > 0 ? "error" : "ok",
+      texto: resultado.advertencias.length > 0 ? `${resumen} Se ignoraron algunas líneas: ${resultado.advertencias.join(" ")}` : resumen,
+    });
+  };
+
   const descartarEdicion = () => {
     setErrorValidacion(null);
+    setMensajeImportacion(null);
     if (configuracion) {
       setLocalAtriles(configuracion.atriles);
       setLocalDescanso(configuracion.descanso);
@@ -417,6 +551,19 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {mensajeImportacion && (
+            <div
+              className={`p-4 rounded-xl flex items-center gap-3 font-mono text-xs shadow-lg border ${
+                mensajeImportacion.tipo === "ok"
+                  ? "bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500/40 text-emerald-800 dark:text-emerald-200"
+                  : "bg-amber-500/10 dark:bg-amber-950/60 border-amber-500/60 text-amber-800 dark:text-amber-200"
+              }`}
+            >
+              {mensajeImportacion.tipo === "ok" ? <Check className="w-5 h-5 shrink-0" /> : <CircleAlert className="w-5 h-5 shrink-0" />}
+              <span>{mensajeImportacion.texto}</span>
+            </div>
+          )}
+
           <div className="flex items-center justify-between glass-panel p-6">
             <div>
               <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
@@ -425,6 +572,26 @@ export default function SettingsPage() {
               <p className="text-xs text-slate-600 dark:text-slate-400 font-mono mt-1">Los parámetros y modos se gestionan y transmiten de forma independiente por área</p>
             </div>
             <div className="flex items-center gap-2">
+              {!soloLectura && (
+                <>
+                  <input
+                    ref={inputImportarRef}
+                    type="file"
+                    accept=".csv,.txt,text/csv,text/plain"
+                    onChange={manejarArchivoImportado}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => inputImportarRef.current?.click()}
+                    disabled={!localAtriles || !localDescanso}
+                    title='Importar bloques horarios desde un CSV con columnas "Zona,Inicio,Fin,Habilitado" (mismo formato de Exportar Horario). Reemplaza los bloques de las zonas que aparezcan en el archivo — hace falta apretar "Guardar" después para aplicarlo.'
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Upload className="w-3.5 h-3.5" /> Importar Horario
+                  </button>
+                </>
+              )}
               {rol === "admin" && (
                 <button
                   type="button"
