@@ -342,6 +342,7 @@ void tareaRed(void* parametro) {
 
                 if (ahora - ultimoEnvioTelemetriaMillis >= Config::INTERVALO_TELEMETRIA_MS) {
                     ultimoEnvioTelemetriaMillis = ahora;
+                    g_telemetria.horaDispositivo = timestampIso();
                     g_cloud.enviarTelemetria(g_telemetria);
                 }
                 if (ahora - ultimoEnvioSensoresMillis >= Config::INTERVALO_ENVIO_SENSORES_MS) {

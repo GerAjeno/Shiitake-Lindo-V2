@@ -90,6 +90,7 @@ export interface TelemetriaActual {
   ultimaActualizacion: string; // ISO 8601, asignado por el backend
   otaEstado?: string;
   otaProgreso?: number;
+  horaDispositivo?: string; // ISO 8601 UTC, hora del reloj del propio ESP32 (RTC o NTP); ausente en firmware previo a este campo
 }
 
 export const TIPOS_ALERTA = ['INFO', 'ADVERTENCIA', 'CRITICA'] as const;

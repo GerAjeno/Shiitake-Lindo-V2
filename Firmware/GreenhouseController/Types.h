@@ -112,6 +112,7 @@ struct TelemetriaActual {
     String firmwareVersion;
     String otaEstado = "INACTIVO";
     int otaProgreso = 0;
+    String horaDispositivo; // ISO 8601 UTC, hora actual del reloj del sistema (RTC o NTP), ver timestampIso()
 };
 
 #endif // TYPES_H

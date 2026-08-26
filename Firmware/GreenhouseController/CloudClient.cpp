@@ -200,6 +200,7 @@ void CloudClient::enviarTelemetria(const TelemetriaActual& t) {
     d["firmwareVersion"] = t.firmwareVersion;
     d["otaEstado"] = t.otaEstado;
     d["otaProgreso"] = t.otaProgreso;
+    d["horaDispositivo"] = t.horaDispositivo;
 
     enviarJson(doc);
 }

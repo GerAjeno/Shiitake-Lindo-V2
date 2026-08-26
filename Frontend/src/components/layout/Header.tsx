@@ -5,7 +5,7 @@
  * @description Barra superior con indicador de conectividad al backend y latido del controlador.
  */
 
-import { Wifi, WifiOff, Cpu, ShieldCheck, LogOut, Sun, Moon } from "lucide-react";
+import { Wifi, WifiOff, Cpu, Clock, ShieldCheck, LogOut, Sun, Moon } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { ShiitakeLogo } from "@/components/icons/ShiitakeLogo";
@@ -13,10 +13,11 @@ import { ShiitakeLogo } from "@/components/icons/ShiitakeLogo";
 interface PropsHeader {
   conectadoRTDB: boolean; // conexión WebSocket con el backend (nombre histórico conservado)
   espOnline?: boolean;
+  horaDispositivo?: string; // ISO 8601 UTC, reloj del propio ESP32 — solo se muestra a admin
 }
 
-export function Header({ conectadoRTDB, espOnline = false }: PropsHeader) {
-  const { usuario, cerrarSesion } = useAuth();
+export function Header({ conectadoRTDB, espOnline = false, horaDispositivo }: PropsHeader) {
+  const { usuario, rol, cerrarSesion } = useAuth();
   const { tema, alternarTema } = useTheme();
 
   return (
@@ -51,6 +52,26 @@ export function Header({ conectadoRTDB, espOnline = false }: PropsHeader) {
           <span className="hidden sm:inline">{espOnline ? "CONTROLADOR ONLINE" : "CONTROLADOR OFFLINE"}</span>
           <span className="sm:hidden">{espOnline ? "ESP OK" : "ESP OFF"}</span>
         </div>
+
+        {rol === "admin" && horaDispositivo && (
+          <div
+            title="Hora del reloj del ESP32 (solo visible para administradores)"
+            className="hidden md:flex items-center gap-1.5 px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-mono border bg-slate-500/10 border-slate-400/30 text-slate-600 dark:text-slate-400"
+          >
+            <Clock className="w-3 md:w-3.5 h-3 md:h-3.5 shrink-0" />
+            <span>
+              {new Date(horaDispositivo).toLocaleString("es-CL", {
+                timeZone: "America/Santiago",
+                day: "2-digit",
+                month: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              })}
+            </span>
+          </div>
+        )}
 
         <button
           onClick={alternarTema}
