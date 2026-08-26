@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { Save, Check, RefreshCw, Clock, Droplets, Sliders as SlidersIcon, ShieldAlert, CircleAlert, KeyRound } from "lucide-react";
+import { Save, Check, RefreshCw, Clock, Droplets, Sliders as SlidersIcon, ShieldAlert, CircleAlert, KeyRound, Download } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -59,6 +59,26 @@ const VISUAL_DESCANSO: VisualZona = {
   colorActivoAuto: "bg-emerald-500/20 border-emerald-500 text-emerald-700 dark:text-emerald-300 shadow-lg shadow-emerald-950/50",
   releLabel: "Relé 2",
 };
+
+function csvEscaparCelda(valor: unknown): string {
+  const texto = String(valor ?? "");
+  return `"${texto.replace(/"/g, '""')}"`;
+}
+
+/** CSV con los bloques horarios (TEMPORIZADO) de ambas zonas — export exclusivo de admin, ver
+ * SettingsPage. Se arma en el cliente a partir de la config ya cargada, no requiere un endpoint
+ * nuevo (el mismo dato ya se muestra en pantalla al resto de los roles, solo sin editar). */
+function construirCsvHorarios(atriles: ConfiguracionZona, descanso: ConfiguracionZona): string {
+  const encabezado = ["Zona", "ID", "Inicio", "Fin", "Habilitado"];
+  const filas: string[][] = [];
+  for (const [nombreZona, zona] of [["Atriles", atriles], ["Descanso", descanso]] as [string, ConfiguracionZona][]) {
+    for (const r of zona.rangosHorarios) {
+      filas.push([nombreZona, r.id, r.inicio, r.fin, r.habilitado ? "Sí" : "No"]);
+    }
+  }
+  const lineas = [encabezado, ...filas].map((fila) => fila.map(csvEscaparCelda).join(","));
+  return "﻿" + lineas.join("\r\n");
+}
 
 function PillModo({ activo, colorActivo, onClick, disabled, children }: { activo: boolean; colorActivo: string; onClick: () => void; disabled: boolean; children: React.ReactNode }) {
   return (
@@ -364,6 +384,18 @@ export default function SettingsPage() {
     setLocalDescanso(completa.descanso);
   };
 
+  const exportarHorario = () => {
+    if (!configuracion) return;
+    const csv = construirCsvHorarios(configuracion.atriles, configuracion.descanso);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Horario_Shiitake_Lindo_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   const descartarEdicion = () => {
     setErrorValidacion(null);
     if (configuracion) {
@@ -392,11 +424,24 @@ export default function SettingsPage() {
               </h1>
               <p className="text-xs text-slate-600 dark:text-slate-400 font-mono mt-1">Los parámetros y modos se gestionan y transmiten de forma independiente por área</p>
             </div>
-            {guardado && (
-              <span className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-lg text-xs font-mono font-bold">
-                ✓ Sincronizado en Cloud
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {rol === "admin" && (
+                <button
+                  type="button"
+                  onClick={exportarHorario}
+                  disabled={!configuracion}
+                  title="Exportar los bloques horarios (TEMPORIZADO) de ambas zonas a CSV"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Download className="w-3.5 h-3.5" /> Exportar Horario
+                </button>
+              )}
+              {guardado && (
+                <span className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-lg text-xs font-mono font-bold">
+                  ✓ Sincronizado en Cloud
+                </span>
+              )}
+            </div>
           </div>
 
           {rol === "admin" && <FirmwareManager actual={actual} />}
