@@ -5,7 +5,7 @@
  * @description Barra superior con indicador de conectividad al backend y latido del controlador.
  */
 
-import { Wifi, WifiOff, Cpu, Clock, ShieldCheck, LogOut, Sun, Moon } from "lucide-react";
+import { Wifi, WifiOff, Cpu, Clock, Server, ShieldCheck, LogOut, Sun, Moon } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { ShiitakeLogo } from "@/components/icons/ShiitakeLogo";
@@ -14,9 +14,20 @@ interface PropsHeader {
   conectadoRTDB: boolean; // conexión WebSocket con el backend (nombre histórico conservado)
   espOnline?: boolean;
   horaDispositivo?: string; // ISO 8601 UTC, reloj del propio ESP32 — solo se muestra a admin
+  horaServidor?: string; // ISO 8601 UTC, hora del backend al recibir la última telemetría — solo se muestra a admin
 }
 
-export function Header({ conectadoRTDB, espOnline = false, horaDispositivo }: PropsHeader) {
+const FORMATO_HORA: Intl.DateTimeFormatOptions = {
+  timeZone: "America/Santiago",
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+};
+
+export function Header({ conectadoRTDB, espOnline = false, horaDispositivo, horaServidor }: PropsHeader) {
   const { usuario, rol, cerrarSesion } = useAuth();
   const { tema, alternarTema } = useTheme();
 
@@ -55,21 +66,23 @@ export function Header({ conectadoRTDB, espOnline = false, horaDispositivo }: Pr
 
         {rol === "admin" && horaDispositivo && (
           <div
-            title="Hora del reloj del ESP32 (solo visible para administradores)"
+            title="Hora del reloj del ESP32 (RTC/NTP) — solo visible para administradores"
             className="hidden md:flex items-center gap-1.5 px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-mono border bg-slate-500/10 border-slate-400/30 text-slate-600 dark:text-slate-400"
           >
             <Clock className="w-3 md:w-3.5 h-3 md:h-3.5 shrink-0" />
-            <span>
-              {new Date(horaDispositivo).toLocaleString("es-CL", {
-                timeZone: "America/Santiago",
-                day: "2-digit",
-                month: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: false,
-              })}
-            </span>
+            <span className="opacity-60">ESP</span>
+            <span>{new Date(horaDispositivo).toLocaleString("es-CL", FORMATO_HORA)}</span>
+          </div>
+        )}
+
+        {rol === "admin" && horaServidor && (
+          <div
+            title="Hora del servidor al recibir la última telemetría — solo visible para administradores"
+            className="hidden md:flex items-center gap-1.5 px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-mono border bg-violet-500/10 border-violet-400/30 text-violet-600 dark:text-violet-400"
+          >
+            <Server className="w-3 md:w-3.5 h-3 md:h-3.5 shrink-0" />
+            <span className="opacity-60">SRV</span>
+            <span>{new Date(horaServidor).toLocaleString("es-CL", FORMATO_HORA)}</span>
           </div>
         )}
 

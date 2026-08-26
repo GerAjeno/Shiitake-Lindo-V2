@@ -162,6 +162,7 @@ async function procesarMensajeDispositivo(dispositivoId: string, mensaje: Mensaj
            ota_progreso = EXCLUDED.ota_progreso, actualizado_en = now()`,
         [dispositivoId, t.estadoWifi, t.rssiWifi, t.firmwareVersion, t.otaEstado ?? null, t.otaProgreso ?? null]
       );
+      t.ultimaActualizacion = new Date().toISOString();
       difundirANavegadores({ tipo: 'telemetria', datos: t });
       break;
     }

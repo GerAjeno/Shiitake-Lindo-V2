@@ -157,7 +157,7 @@ export default function UsuariosPage() {
       <div className="min-h-screen flex bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <Header conectadoRTDB={conectado} espOnline={espOnline} horaDispositivo={actual?.horaDispositivo} />
+          <Header conectadoRTDB={conectado} espOnline={espOnline} horaDispositivo={actual?.horaDispositivo} horaServidor={actual?.ultimaActualizacion} />
           <main className="flex-1 flex items-center justify-center p-6">
             <div className="glass-panel p-8 max-w-md text-center">
               <ShieldOff className="w-10 h-10 text-rose-500 mx-auto mb-3" />

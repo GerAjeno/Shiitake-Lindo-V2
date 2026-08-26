@@ -52,7 +52,7 @@ export default function AlertsPage() {
     <div className="min-h-screen flex bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <Header conectadoRTDB={conectado} espOnline={espOnline} horaDispositivo={actual?.horaDispositivo} />
+        <Header conectadoRTDB={conectado} espOnline={espOnline} horaDispositivo={actual?.horaDispositivo} horaServidor={actual?.ultimaActualizacion} />
         <main className="flex-1 p-4 pb-24 md:p-8 md:pb-8 overflow-y-auto space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-bold flex items-center gap-2"><Bell className="w-5 h-5" /> Alertas del sistema</h1>
