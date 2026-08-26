@@ -306,8 +306,13 @@ void tareaRed(void* parametro) {
     (void)parametro;
     g_wifi.inicializar();
 
-    bool ntpSincronizado = false;
-    bool rtcCalibrado = false;
+    // Resincronización periódica (no solo al conectar): el cristal del DS1307 no compensa
+    // temperatura y deriva con el tiempo, y una sesión de WiFi larga (semanas sin reiniciar)
+    // no debe quedarse con la hora de NTP tomada una sola vez al conectar. Cada resync también
+    // recalibra el RTC, así el modo TEMPORIZADO no se desvía por hora vieja.
+    constexpr uint32_t INTERVALO_RESYNC_NTP_MS = 10UL * 60UL * 1000UL;
+    bool conexionInicializada = false;
+    uint32_t ultimoResyncNtpMillis = 0;
     uint32_t ultimoEnvioTelemetriaMillis = 0;
     uint32_t ultimoEnvioSensoresMillis = 0;
 
@@ -315,27 +320,33 @@ void tareaRed(void* parametro) {
         g_wifi.procesarConexion();
 
         if (g_wifi.estaConectado()) {
-            if (!ntpSincronizado) {
+            uint32_t ahoraMs = millis();
+            bool tocaResyncNtp = !conexionInicializada || (ahoraMs - ultimoResyncNtpMillis) >= INTERVALO_RESYNC_NTP_MS;
+
+            if (tocaResyncNtp) {
                 configTzTime(Config::ZONA_HORARIA_POSIX, "pool.ntp.org", "time.google.com");
-                ntpSincronizado = true;
-                g_cloud.inicializar(Config::BACKEND_HOST_DEFAULT, 443, Config::ID_DISPOSITIVO, Config::DEVICE_TOKEN);
+                ultimoResyncNtpMillis = ahoraMs;
+                if (!conexionInicializada) {
+                    conexionInicializada = true;
+                    g_cloud.inicializar(Config::BACKEND_HOST_DEFAULT, 443, Config::ID_DISPOSITIVO, Config::DEVICE_TOKEN);
+                } else {
+                    Serial.println("[RED] Resincronización periódica de NTP (10 min) disparada.");
+                }
             }
 
             // configTzTime() dispara el sync SNTP pero no es instantáneo — se espera a que
-            // time() dé una fecha plausible (NTP ya aplicó) antes de calibrar el RTC con ella,
-            // una sola vez por sesión de WiFi. Así el RTC se mantiene preciso entre los cortes de
-            // internet, en vez de derivar solo con su propio cristal (el DS1307 no compensa
-            // temperatura).
-            if (!rtcCalibrado && time(nullptr) > 1700000000) { // > nov-2023: NTP ya sincronizó
+            // time() dé una fecha plausible (NTP ya aplicó) antes de calibrar el RTC con ella.
+            // Se repite en cada resync (no solo la primera vez) para que el RTC no derive solo
+            // con su propio cristal entre calibraciones.
+            if (tocaResyncNtp && time(nullptr) > 1700000000) { // > nov-2023: NTP ya sincronizó
                 if (g_rtc.ajustarEpocaUtc(time(nullptr))) {
-                    rtcCalibrado = true;
                     Serial.println("[RED] RTC DS1307 calibrado con la hora de NTP.");
                 }
             }
 
             g_cloud.procesar();
 
-            uint32_t ahora = millis();
+            uint32_t ahora = ahoraMs;
             if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) == pdTRUE) {
                 g_telemetria.estadoWifi = g_wifi.obtenerSsid();
                 g_telemetria.rssiWifi = g_wifi.obtenerRssi();

@@ -13,7 +13,7 @@ import { ShiitakeLogo } from "@/components/icons/ShiitakeLogo";
 interface PropsHeader {
   conectadoRTDB: boolean; // conexión WebSocket con el backend (nombre histórico conservado)
   espOnline?: boolean;
-  horaDispositivo?: string; // ISO 8601 UTC, reloj del propio ESP32 — solo se muestra a admin
+  horaDispositivo?: string; // ISO 8601 UTC, reloj del propio ESP32 — visible para admin y operador
   horaServidor?: string; // ISO 8601 UTC, hora del backend al recibir la última telemetría — solo se muestra a admin
 }
 
@@ -64,9 +64,9 @@ export function Header({ conectadoRTDB, espOnline = false, horaDispositivo, hora
           <span className="sm:hidden">{espOnline ? "ESP OK" : "ESP OFF"}</span>
         </div>
 
-        {rol === "admin" && horaDispositivo && (
+        {(rol === "admin" || rol === "operador") && horaDispositivo && (
           <div
-            title="Hora del reloj del ESP32 (RTC/NTP) — solo visible para administradores"
+            title="Hora del reloj del ESP32 (RTC/NTP)"
             className="hidden md:flex items-center gap-1.5 px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-mono border bg-slate-500/10 border-slate-400/30 text-slate-600 dark:text-slate-400"
           >
             <Clock className="w-3 md:w-3.5 h-3 md:h-3.5 shrink-0" />
