@@ -84,7 +84,7 @@ private:
 
     void manejarEvento(WStype_t tipo, uint8_t* payload, size_t longitud);
     void procesarMensajeEntrante(const String& json);
-    void aplicarConfiguracionZona(JsonObjectConst obj, ConfiguracionZona& zona);
+    void aplicarConfiguracionZona(JsonObjectConst obj, ConfiguracionZona& zona, const char* nombreZona);
     void enviarJson(const JsonDocument& doc);
 
     static CloudClient* _instancia;

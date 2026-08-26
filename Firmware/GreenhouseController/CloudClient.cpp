@@ -66,7 +66,7 @@ uint32_t CloudClient::millisDesdeUltimoContactoExitoso() const {
     return millis() - _ultimoContactoExitosoMillis;
 }
 
-void CloudClient::aplicarConfiguracionZona(JsonObjectConst obj, ConfiguracionZona& zona) {
+void CloudClient::aplicarConfiguracionZona(JsonObjectConst obj, ConfiguracionZona& zona, const char* nombreZona) {
     if (obj.isNull()) return;
     if (!obj["humedadMinima"].isNull()) zona.humedadMinima = obj["humedadMinima"];
     if (!obj["humedadMaxima"].isNull()) zona.humedadMaxima = obj["humedadMaxima"];
@@ -83,7 +83,18 @@ void CloudClient::aplicarConfiguracionZona(JsonObjectConst obj, ConfiguracionZon
     if (!rangos.isNull()) {
         zona.cantidadRangos = 0;
         for (JsonObjectConst r : rangos) {
-            if (zona.cantidadRangos >= 8) break;
+            if (zona.cantidadRangos >= 8) {
+                // rangosHorarios[] es de tamaño fijo (8, ver Types.h) — antes esto se descartaba
+                // en silencio, así que un bloque agregado de más (ej. un noveno horario programado)
+                // desaparecía del control sin que quedara ningún rastro, ni en el Monitor Serie ni
+                // en la auditoría. El backend ya valida este límite al guardar (ver
+                // Backend/src/routes/config.ts), pero esto cubre configuraciones guardadas antes de
+                // esa validación o escritas directo en la base de datos.
+                registrarLog("CONFIG", "ADVERTENCIA",
+                    String("Zona ") + nombreZona + ": se recibieron " + String(rangos.size()) +
+                    " bloques horarios, se ignoraron los que exceden el límite de 8 del firmware.");
+                break;
+            }
             RangoHorario& destino = zona.rangosHorarios[zona.cantidadRangos];
             destino.id = r["id"].as<String>();
             destino.inicio = r["inicio"].as<String>();
@@ -128,8 +139,8 @@ void CloudClient::procesarMensajeEntrante(const String& json) {
     }
 
     if (tipoMsg == "configuracion") {
-        aplicarConfiguracionZona(datos["atriles"], _configSistemaRef->atriles);
-        aplicarConfiguracionZona(datos["descanso"], _configSistemaRef->descanso);
+        aplicarConfiguracionZona(datos["atriles"], _configSistemaRef->atriles, "Atriles");
+        aplicarConfiguracionZona(datos["descanso"], _configSistemaRef->descanso, "Descanso");
         if (!datos["intervaloConmutacionMinimoSeg"].isNull()) {
             _configSistemaRef->intervaloConmutacionMinimoSeg = datos["intervaloConmutacionMinimoSeg"];
         }
