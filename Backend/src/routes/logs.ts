@@ -117,9 +117,9 @@ logsRouter.get('/export', async (req, res) => {
     params
   );
 
-  const encabezado = ['Fecha', 'Categoría', 'Nivel', 'Mensaje', 'Usuario', 'IP'];
+  const encabezado = ['Fecha', 'Categoría', 'Nivel', 'Mensaje', 'Usuario', 'IP', 'Valor anterior', 'Valor nuevo'];
   const filas = rows.map((log) =>
-    [log.timestamp, log.categoria, log.nivel, log.mensaje, log.usuarioEmail ?? '', log.usuarioIp ?? '']
+    [log.timestamp, log.categoria, log.nivel, log.mensaje, log.usuarioEmail ?? '', log.usuarioIp ?? '', log.valorAnterior ?? '', log.valorNuevo ?? '']
       .map(csvEscapar)
       .join(',')
   );

@@ -49,10 +49,17 @@ usuariosRouter.put('/:uid/rol', async (req, res) => {
   if (req.params.uid === req.usuario!.uid) {
     return res.status(400).json({ error: 'No podés cambiar tu propio rol.' });
   }
+  const { rows: previas } = await pool.query('SELECT email, rol FROM usuarios WHERE uid = $1', [req.params.uid]);
+  const anterior = previas[0];
   await pool.query('UPDATE usuarios SET rol = $1 WHERE uid = $2', [rol, req.params.uid]);
   await pool.query(
-    `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email) VALUES ('USUARIOS', 'INFO', $1, $2)`,
-    [`Rol de ${req.params.uid} cambiado a ${rol}`, req.usuario!.email]
+    `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email, valor_anterior, valor_nuevo) VALUES ('USUARIOS', 'INFO', $1, $2, $3, $4)`,
+    [
+      `Rol de ${anterior?.email ?? req.params.uid} cambiado a ${rol}`,
+      req.usuario!.email,
+      JSON.stringify({ rol: anterior?.rol ?? null }),
+      JSON.stringify({ rol }),
+    ]
   );
   res.json({ ok: true });
 });
@@ -62,10 +69,17 @@ usuariosRouter.put('/:uid/activo', async (req, res) => {
   if (req.params.uid === req.usuario!.uid) {
     return res.status(400).json({ error: 'No podés suspender tu propia cuenta.' });
   }
+  const { rows: previas } = await pool.query('SELECT email, activo FROM usuarios WHERE uid = $1', [req.params.uid]);
+  const anterior = previas[0];
   await pool.query('UPDATE usuarios SET activo = $1 WHERE uid = $2', [activo, req.params.uid]);
   await pool.query(
-    `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email) VALUES ('USUARIOS', 'INFO', $1, $2)`,
-    [`Usuario ${req.params.uid} ${activo ? 'reactivado' : 'suspendido'}`, req.usuario!.email]
+    `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email, valor_anterior, valor_nuevo) VALUES ('USUARIOS', 'INFO', $1, $2, $3, $4)`,
+    [
+      `Usuario ${anterior?.email ?? req.params.uid} ${activo ? 'reactivado' : 'suspendido'}`,
+      req.usuario!.email,
+      JSON.stringify({ activo: anterior?.activo ?? null }),
+      JSON.stringify({ activo }),
+    ]
   );
   res.json({ ok: true });
 });

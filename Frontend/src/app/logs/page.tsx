@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { FileText, Filter, Search, Activity, Cpu, Wifi, ShieldAlert, CheckCircle2, Sliders, ChevronLeft, ChevronRight, CalendarDays, X, Download } from "lucide-react";
+import { FileText, Filter, Search, Activity, Cpu, Wifi, ShieldAlert, CheckCircle2, Sliders, ChevronLeft, ChevronRight, ChevronDown, CalendarDays, X, Download } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -81,6 +81,49 @@ function paginasVisibles(paginaActual: number, totalPaginas: number): number[] {
   return paginas;
 }
 
+function formatearValorDetalle(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "boolean") return v ? "Sí" : "No";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+/**
+ * Deriva las filas campo/antes/después a partir de valorAnterior (objeto completo previo) y
+ * valorNuevo (solo los campos que se enviaron en la actualización, ver Backend/src/routes/config.ts).
+ * Solo se listan los campos presentes en valorNuevo — son los únicos que realmente cambiaron.
+ */
+function camposCambiados(anterior: unknown, nuevo: unknown): { campo: string; antes: unknown; despues: unknown }[] {
+  if (typeof nuevo !== "object" || nuevo === null || Array.isArray(nuevo)) {
+    return [{ campo: "valor", antes: anterior, despues: nuevo }];
+  }
+  const nuevoObj = nuevo as Record<string, unknown>;
+  const anteriorObj = typeof anterior === "object" && anterior !== null ? (anterior as Record<string, unknown>) : {};
+  const filas: { campo: string; antes: unknown; despues: unknown }[] = [];
+  for (const clave of Object.keys(nuevoObj)) {
+    if (nuevoObj[clave] === undefined) continue;
+    filas.push({ campo: clave, antes: anteriorObj[clave], despues: nuevoObj[clave] });
+  }
+  return filas;
+}
+
+function DetalleCambio({ valorAnterior, valorNuevo }: { valorAnterior: unknown; valorNuevo: unknown }) {
+  const filas = camposCambiados(valorAnterior, valorNuevo);
+  if (filas.length === 0) return null;
+  return (
+    <div className="mt-2 rounded-lg border border-slate-800/80 bg-slate-950/40 divide-y divide-slate-800/60 overflow-hidden">
+      {filas.map((f) => (
+        <div key={f.campo} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5 text-[11px] font-mono">
+          <span className="text-slate-400 min-w-[110px]">{f.campo}</span>
+          <span className="text-rose-400/90 line-through break-all">{formatearValorDetalle(f.antes)}</span>
+          <span className="text-slate-600">→</span>
+          <span className="text-emerald-400 break-all">{formatearValorDetalle(f.despues)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function LogsPage() {
   const { actual, conectado, espOnline } = useRealtimeData();
 
@@ -95,6 +138,16 @@ export default function LogsPage() {
   const [fecha, setFecha] = useState(""); // "" = sin filtro de fecha, si no "YYYY-MM-DD"
   const [busquedaInput, setBusquedaInput] = useState(""); // lo que el usuario está tipeando
   const [busqueda, setBusqueda] = useState(""); // versión con debounce, la que realmente se manda al servidor
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+
+  function alternarDetalle(id: string) {
+    setExpandidos((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(id)) siguiente.delete(id);
+      else siguiente.add(id);
+      return siguiente;
+    });
+  }
 
   // Espera 400ms sin tipeo antes de disparar la búsqueda contra el servidor — buscar en el
   // servidor (no solo en la página cargada) significa que cada tecla dispararía una consulta a
@@ -278,37 +331,53 @@ export default function LogsPage() {
                 <p className="text-xs text-slate-500 mt-1">Los eventos automáticos y cambios de estado aparecerán aquí.</p>
               </div>
             ) : (
-              logs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-slate-900/50 hover:bg-slate-900/80 rounded-xl border border-slate-800/80 transition shadow-sm"
-                >
-                  <div className="flex items-start gap-3.5 min-w-0">
-                    <div className="p-2 bg-slate-800/60 rounded-lg shrink-0 mt-0.5 border border-slate-700/50">
-                      {obtenerIconoCategoria(normalizarCategoria(log.categoria))}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-[11px] font-bold tracking-wider uppercase text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700/60">
-                          {log.categoria || "GENERIC"}
-                        </span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${obtenerColorNivel(log.nivel)}`}>
-                          {log.nivel || "INFO"}
-                        </span>
-                        <span className="text-xs font-mono text-slate-400 sm:hidden">{formatearTimestamp(log.timestamp)}</span>
+              logs.map((log) => {
+                const tieneDetalle = log.valorAnterior !== undefined || log.valorNuevo !== undefined;
+                const expandido = expandidos.has(log.id);
+                return (
+                  <div
+                    key={log.id}
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-slate-900/50 hover:bg-slate-900/80 rounded-xl border border-slate-800/80 transition shadow-sm"
+                  >
+                    <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                      <div className="p-2 bg-slate-800/60 rounded-lg shrink-0 mt-0.5 border border-slate-700/50">
+                        {obtenerIconoCategoria(normalizarCategoria(log.categoria))}
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed break-words">
-                        {log.mensaje}
-                        {log.usuarioEmail && <span className="text-slate-500"> | Cuenta: {log.usuarioEmail}</span>}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <span className="text-[11px] font-bold tracking-wider uppercase text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700/60">
+                            {log.categoria || "GENERIC"}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${obtenerColorNivel(log.nivel)}`}>
+                            {log.nivel || "INFO"}
+                          </span>
+                          <span className="text-xs font-mono text-slate-400 sm:hidden">{formatearTimestamp(log.timestamp)}</span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed break-words">
+                          {log.mensaje}
+                          {log.usuarioEmail && <span className="text-slate-500"> | Cuenta: {log.usuarioEmail}</span>}
+                        </p>
+                        {tieneDetalle && (
+                          <>
+                            <button
+                              onClick={() => alternarDetalle(log.id)}
+                              className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-emerald-400/90 hover:text-emerald-300 transition-colors"
+                            >
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandido ? "rotate-180" : ""}`} />
+                              {expandido ? "Ocultar detalle" : "Ver detalle del cambio"}
+                            </button>
+                            {expandido && <DetalleCambio valorAnterior={log.valorAnterior} valorNuevo={log.valorNuevo} />}
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="hidden sm:block shrink-0 text-right">
+                      <span className="text-xs font-mono text-slate-400 block">{formatearTimestamp(log.timestamp)}</span>
                     </div>
                   </div>
-
-                  <div className="hidden sm:block shrink-0 text-right">
-                    <span className="text-xs font-mono text-slate-400 block">{formatearTimestamp(log.timestamp)}</span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
