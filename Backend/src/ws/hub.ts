@@ -252,24 +252,19 @@ async function procesarMensajeDispositivo(dispositivoId: string, mensaje: Mensaj
  * cuando llega una nueva conexión con el mismo id — antes esto pasaba en silencio: la conexión
  * vieja quedaba huérfana (nunca se cerraba, solo dejaba de recibir tráfico) y nadie se enteraba
  * de que había dos conexiones con el mismo token disputándose el rol de "el dispositivo".
+ *
+ * Solo queda registrado en sistema_logs (Auditoría), no como alerta — reconectar tras un reinicio
+ * o un corte de WiFi es esperable y frecuente, y generar una notificación cada vez resultaba
+ * ruidoso sin aportar nada que ya no se pudiera ver revisando el log cuando hiciera falta.
  */
 async function reemplazarDispositivoActivo(dispositivoId: string, nuevoWs: WebSocket) {
   if (dispositivoActivo && dispositivoActivo.ws.readyState === WebSocket.OPEN) {
     console.warn(`[WS] Nueva conexión de dispositivo "${dispositivoId}" reemplaza a una ya activa — cerrando la anterior.`);
     dispositivoActivo.ws.close(4008, 'Reemplazado por una nueva conexión con el mismo id');
     await pool.query(
-      `INSERT INTO alertas (id, tipo, categoria, mensaje, resuelta, ts) VALUES ('DISPOSITIVO_REEMPLAZADO', 'ADVERTENCIA', 'FIRMWARE', $1, false, now())
-       ON CONFLICT (id) DO UPDATE SET mensaje = EXCLUDED.mensaje, ts = now(), resuelta = false`,
+      `INSERT INTO sistema_logs (categoria, nivel, mensaje) VALUES ('SISTEMA', 'ADVERTENCIA', $1)`,
       [`Se detectó una segunda conexión del dispositivo "${dispositivoId}" — la anterior fue reemplazada.`]
     );
-    difundirANavegadores({
-      tipo: 'alerta',
-      datos: {
-        id: 'DISPOSITIVO_REEMPLAZADO', tipo: 'ADVERTENCIA', categoria: 'FIRMWARE',
-        mensaje: `Se detectó una segunda conexión del dispositivo "${dispositivoId}" — la anterior fue reemplazada.`,
-        resuelta: false, timestamp: new Date().toISOString(),
-      },
-    });
   }
   dispositivoActivo = { id: dispositivoId, ws: nuevoWs };
 }
