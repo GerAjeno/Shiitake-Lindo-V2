@@ -94,10 +94,11 @@ export function TemporizadorConfig({ nombreZona, colorTema, rangos = [], soloLec
       setError("La hora de inicio y fin no pueden ser idénticas.");
       return;
     }
-    // El firmware del ESP32 solo guarda 8 bloques por zona (arreglo de tamaño fijo) — un 9no bloque
-    // se aceptaba en la web pero nunca se aplicaba en el controlador real, sin ningún aviso.
-    if (!editandoId && rangos.length >= 8) {
-      setError("Ya hay 8 bloques horarios (el máximo que soporta el firmware del ESP32). Eliminá uno para agregar otro.");
+    // El firmware del ESP32 solo guarda MAX_RANGOS_HORARIOS bloques por zona (arreglo de tamaño
+    // fijo, ver Types.h) — un bloque de más se aceptaba en la web pero nunca se aplicaba en el
+    // controlador real, sin ningún aviso. Debe coincidir con el límite de Backend/src/routes/config.ts.
+    if (!editandoId && rangos.length >= 40) {
+      setError("Ya hay 40 bloques horarios (el máximo que soporta el firmware del ESP32). Eliminá uno para agregar otro.");
       return;
     }
     if (editandoId) {

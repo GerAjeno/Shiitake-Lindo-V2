@@ -83,16 +83,16 @@ void CloudClient::aplicarConfiguracionZona(JsonObjectConst obj, ConfiguracionZon
     if (!rangos.isNull()) {
         zona.cantidadRangos = 0;
         for (JsonObjectConst r : rangos) {
-            if (zona.cantidadRangos >= 8) {
-                // rangosHorarios[] es de tamaño fijo (8, ver Types.h) — antes esto se descartaba
-                // en silencio, así que un bloque agregado de más (ej. un noveno horario programado)
-                // desaparecía del control sin que quedara ningún rastro, ni en el Monitor Serie ni
-                // en la auditoría. El backend ya valida este límite al guardar (ver
-                // Backend/src/routes/config.ts), pero esto cubre configuraciones guardadas antes de
-                // esa validación o escritas directo en la base de datos.
+            if (zona.cantidadRangos >= MAX_RANGOS_HORARIOS) {
+                // rangosHorarios[] es de tamaño fijo (ver MAX_RANGOS_HORARIOS en Types.h) — antes
+                // esto se descartaba en silencio, así que un bloque agregado de más desaparecía del
+                // control sin que quedara ningún rastro, ni en el Monitor Serie ni en la auditoría.
+                // El backend ya valida este límite al guardar (ver Backend/src/routes/config.ts),
+                // pero esto cubre configuraciones guardadas antes de esa validación o escritas
+                // directo en la base de datos.
                 registrarLog("CONFIG", "ADVERTENCIA",
                     String("Zona ") + nombreZona + ": se recibieron " + String(rangos.size()) +
-                    " bloques horarios, se ignoraron los que exceden el límite de 8 del firmware.");
+                    " bloques horarios, se ignoraron los que exceden el límite de " + String(MAX_RANGOS_HORARIOS) + " del firmware.");
                 break;
             }
             RangoHorario& destino = zona.rangosHorarios[zona.cantidadRangos];

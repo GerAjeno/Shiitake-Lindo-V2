@@ -70,13 +70,20 @@ struct RangoHorario {
     bool habilitado = false;
 };
 
+// Tamaño fijo del arreglo de bloques horarios por zona (modo TEMPORIZADO) — usado también como
+// tope de validación en Backend/src/routes/config.ts y en el mensaje de aviso de
+// CloudClient::aplicarConfiguracionZona. Si se sube este número hay que subirlo en esos dos
+// lugares también (no hay forma de compartir la constante entre el firmware en C++ y el backend
+// en TypeScript).
+constexpr uint8_t MAX_RANGOS_HORARIOS = 40;
+
 struct ConfiguracionZona {
     float humedadMinima = 75.0f;
     float humedadMaxima = 85.0f;
     ModoControl modo = ModoControl::AUTOMATICO;
     bool humidificadorManual = false;
     bool temporizadorEncendido = false;
-    RangoHorario rangosHorarios[8];
+    RangoHorario rangosHorarios[MAX_RANGOS_HORARIOS];
     uint8_t cantidadRangos = 0;
     int umbralAdvertenciaMQ = 1500;
     int umbralAlarmaMQ = 2800;

@@ -47,10 +47,11 @@ export function validarConfiguracionZona(c: ConfiguracionZona): string | null {
     return 'El umbral de advertencia de MQ135 no puede ser mayor que el de alarma.';
   }
   if (!Array.isArray(c.rangosHorarios)) return 'rangosHorarios debe ser un arreglo.';
-  // El firmware guarda los bloques horarios en un arreglo fijo de 8 (ver Types.h en el ESP32) y
-  // descartaba en silencio cualquier bloque de más — sin este límite, guardar un 9no bloque
-  // desde la web parecía funcionar pero ese horario nunca se aplicaba en el controlador real.
-  if (c.rangosHorarios.length > 8) return 'Máximo 8 bloques horarios por zona (límite del firmware del ESP32).';
+  // El firmware guarda los bloques horarios en un arreglo fijo (MAX_RANGOS_HORARIOS en Types.h del
+  // ESP32) y descarta en silencio cualquier bloque de más — sin este límite, guardar un bloque de
+  // más desde la web parecía funcionar pero ese horario nunca se aplicaba en el controlador real.
+  // Si se sube MAX_RANGOS_HORARIOS en el firmware, este número hay que subirlo también acá.
+  if (c.rangosHorarios.length > 40) return 'Máximo 40 bloques horarios por zona (límite del firmware del ESP32).';
   for (const r of c.rangosHorarios) {
     if (!r || typeof r.id !== 'string' || typeof r.habilitado !== 'boolean' || !HORA_REGEX.test(r.inicio) || !HORA_REGEX.test(r.fin)) {
       return 'Cada bloque horario debe tener id, habilitado (bool) e inicio/fin en formato HH:mm.';
