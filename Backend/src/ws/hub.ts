@@ -104,7 +104,7 @@ export function enviarOtaADispositivo(estadoOta: import('../shared/types').Estad
  */
 export async function enviarComandoADispositivo(
   comando: TipoComandoManual
-): Promise<{ ejecutado: boolean; error?: string }> {
+): Promise<{ ejecutado: boolean; error?: string; sht35Lectura?: { temperaturaC: number; humedadPct: number } }> {
   if (!dispositivoConectado()) {
     return { ejecutado: false, error: 'El dispositivo está desconectado.' };
   }
@@ -112,13 +112,13 @@ export async function enviarComandoADispositivo(
   const orderId = uuid();
   const mensaje: ComandoManual = { orderId, comando, emitidoEn: new Date().toISOString() };
 
-  const resultado = new Promise<{ ejecutado: boolean; error?: string }>((resolve) => {
+  const resultado = new Promise<{ ejecutado: boolean; error?: string; sht35Lectura?: { temperaturaC: number; humedadPct: number } }>((resolve) => {
     const timeout = setTimeout(() => {
       comandosPendientes.delete(orderId);
       resolve({ ejecutado: false, error: 'El dispositivo no confirmó la orden en 5 segundos.' });
     }, 5000);
     comandosPendientes.set(orderId, {
-      resolver: (ack: any) => resolve({ ejecutado: !!ack.ejecutado, error: ack.error }),
+      resolver: (ack: any) => resolve({ ejecutado: !!ack.ejecutado, error: ack.error, sht35Lectura: ack.sht35Lectura }),
       timeout,
     });
   });
@@ -362,12 +362,23 @@ export function iniciarWebSocketHub(server: http.Server) {
           // `TipoComandoManual` es solo un tipo de TypeScript — se borra en runtime. Sin esta
           // validación, un payload arbitrario del navegador se relaya tal cual al ESP32 (que
           // confía en lo que le manda el servidor).
-          const c = mensaje.datos as unknown as { tipo?: unknown; zona?: unknown; encender?: unknown };
+          const c = mensaje.datos as unknown as {
+            tipo?: unknown; zona?: unknown; encender?: unknown;
+            direccionActual?: unknown; nuevaDireccion?: unknown;
+          };
           // Id generado por el navegador para correlacionar la respuesta con el comando que la
           // originó (puede haber más de uno en vuelo: cada tarjeta de zona tiene su propio botón).
           const clienteOrderId = typeof mensaje.clienteOrderId === 'string' ? mensaje.clienteOrderId : '';
 
-          if (c?.tipo !== 'humidificador' || (c.zona !== 'atriles' && c.zona !== 'descanso') || typeof c.encender !== 'boolean') {
+          const esHumidificadorValido =
+            c?.tipo === 'humidificador' && (c.zona === 'atriles' || c.zona === 'descanso') && typeof c.encender === 'boolean';
+          // TEMPORAL: ver TipoComandoManual['sht35_asignar_direccion'] en Shared/types.ts.
+          const esSht35Valido =
+            c?.tipo === 'sht35_asignar_direccion' &&
+            typeof c.direccionActual === 'number' && c.direccionActual >= 1 && c.direccionActual <= 247 &&
+            typeof c.nuevaDireccion === 'number' && c.nuevaDireccion >= 1 && c.nuevaDireccion <= 247;
+
+          if (!esHumidificadorValido && !esSht35Valido) {
             enviarANavegador(cliente, { tipo: 'ack', datos: { orderId: clienteOrderId, ejecutado: false, error: 'Comando inválido.' } });
             return;
           }
@@ -382,7 +393,12 @@ export function iniciarWebSocketHub(server: http.Server) {
           const resultado = await enviarComandoADispositivo(mensaje.datos);
           enviarANavegador(cliente, {
             tipo: 'ack',
-            datos: { orderId: clienteOrderId, ejecutado: resultado.ejecutado, error: resultado.error },
+            datos: {
+              orderId: clienteOrderId,
+              ejecutado: resultado.ejecutado,
+              error: resultado.error,
+              sht35Lectura: resultado.sht35Lectura,
+            },
           });
           await pool.query(
             `INSERT INTO sistema_logs (categoria, nivel, mensaje, usuario_email, usuario_ip, valor_nuevo)

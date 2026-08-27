@@ -168,6 +168,9 @@ void CloudClient::procesarMensajeEntrante(const String& json) {
             if (c["valor"].is<float>() || c["valor"].is<int>()) _comandoPendiente.valorFloat = c["valor"];
             else _comandoPendiente.valorTexto = c["valor"].as<String>();
         }
+        // TEMPORAL: ver Sht35Direccionador.h.
+        if (!c["direccionActual"].isNull()) _comandoPendiente.direccionActual = c["direccionActual"];
+        if (!c["nuevaDireccion"].isNull()) _comandoPendiente.nuevaDireccion = c["nuevaDireccion"];
         _comandoPendiente.pendiente = true;
 
     } else if (tipoMsg == "ota") {
@@ -244,6 +247,24 @@ void CloudClient::enviarAck(const String& orderId, bool ejecutado, const String&
     d["orderId"] = orderId;
     d["ejecutado"] = ejecutado;
     if (error.length() > 0) d["error"] = error;
+    enviarJson(doc);
+}
+
+// TEMPORAL: ver Sht35Direccionador.h — igual que enviarAck() pero además adjunta la lectura de
+// verificación (temperatura/humedad) para que la web confirme que fue el sensor correcto.
+void CloudClient::enviarAckSht35(const String& orderId, bool ejecutado, const String& error,
+                                  float temperaturaC, float humedadPct) {
+    JsonDocument doc;
+    doc["tipo"] = "ack";
+    JsonObject d = doc["datos"].to<JsonObject>();
+    d["orderId"] = orderId;
+    d["ejecutado"] = ejecutado;
+    if (error.length() > 0) d["error"] = error;
+    if (ejecutado) {
+        JsonObject lectura = d["sht35Lectura"].to<JsonObject>();
+        lectura["temperaturaC"] = temperaturaC;
+        lectura["humedadPct"] = humedadPct;
+    }
     enviarJson(doc);
 }
 

@@ -27,11 +27,14 @@
 struct ComandoEntrante {
     bool pendiente = false;
     String orderId;
-    String tipo;   // "humidificador"
+    String tipo;   // "humidificador" | "sht35_asignar_direccion" (TEMPORAL, ver Sht35Direccionador.h)
     String zona;   // "atriles" | "descanso"
     bool valorBool = false;
     float valorFloat = 0;
     String valorTexto;
+    // TEMPORAL: solo para tipo == "sht35_asignar_direccion".
+    uint8_t direccionActual = 0;
+    uint8_t nuevaDireccion = 0;
 };
 
 struct OtaEntrante {
@@ -56,6 +59,8 @@ public:
     void enviarSensores(const MatrizSensores& m);
     void enviarLoteHistorial(String jsonLote); // ya serializado por Tasks.cpp; por valor: WebSocketsClient::sendTXT() exige String& no-const
     void enviarAck(const String& orderId, bool ejecutado, const String& error = "");
+    // TEMPORAL: ver Sht35Direccionador.h.
+    void enviarAckSht35(const String& orderId, bool ejecutado, const String& error, float temperaturaC, float humedadPct);
 
     // INotificadorEventos
     // `tipo` debe ser uno de: INFO, ADVERTENCIA, CRITICA (ver TIPOS_ALERTA en Shared/types.ts).

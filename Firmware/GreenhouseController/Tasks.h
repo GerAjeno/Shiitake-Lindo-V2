@@ -13,6 +13,7 @@
 #include "SensorManager.h"
 #include "HumidifierController.h"
 #include "RelayModbusClient.h"
+#include "Sht35Direccionador.h" // TEMPORAL, ver Sht35Direccionador.h
 #include "CloudClient.h"
 #include "ConfigCache.h"
 #include "WiFiManager.h"
@@ -29,6 +30,7 @@ extern bool g_loteHistorialListo;
 
 extern SensorManager g_sensores;
 extern RelayModbusClient g_releClient;
+extern Sht35Direccionador g_sht35Direccionador; // TEMPORAL, ver Sht35Direccionador.h
 extern HumidifierController g_humidificador;
 extern ConfigCache g_configCache;
 extern CloudClient g_cloud;

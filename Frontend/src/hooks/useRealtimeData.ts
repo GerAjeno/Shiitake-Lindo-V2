@@ -32,7 +32,9 @@ export function useRealtimeData() {
   // así que se correlaciona por clienteOrderId en vez de una sola referencia — con una sola
   // referencia, el segundo comando pisaba el resolver del primero y el ACK equivocado resolvía la
   // promesa equivocada.
-  const ackPendientesRef = useRef<Map<string, (ejecutado: boolean, error?: string) => void>>(new Map());
+  const ackPendientesRef = useRef<
+    Map<string, (ejecutado: boolean, error?: string, sht35Lectura?: { temperaturaC: number; humedadPct: number }) => void>
+  >(new Map());
 
   // Snapshot inicial por REST (config + alertas no dependen del WS para la primera carga).
   // Los logs de auditoría se cargan aparte, paginados, directamente en /logs (ver LogsPage).
@@ -85,7 +87,7 @@ export function useRealtimeData() {
             const resolver = ackPendientesRef.current.get(mensaje.datos.orderId);
             if (resolver) {
               ackPendientesRef.current.delete(mensaje.datos.orderId);
-              resolver(mensaje.datos.ejecutado, mensaje.datos.error);
+              resolver(mensaje.datos.ejecutado, mensaje.datos.error, mensaje.datos.sht35Lectura);
             }
             break;
           }
@@ -119,7 +121,11 @@ export function useRealtimeData() {
     setAlertas((prev) => prev.map((a) => (a.id === id ? { ...a, resuelta: true } : a)));
   }, []);
 
-  const enviarComando = useCallback((comando: TipoComandoManual): Promise<{ ejecutado: boolean; error?: string }> => {
+  const enviarComando = useCallback((comando: TipoComandoManual): Promise<{
+    ejecutado: boolean;
+    error?: string;
+    sht35Lectura?: { temperaturaC: number; humedadPct: number };
+  }> => {
     return new Promise((resolve) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         resolve({ ejecutado: false, error: "Sin conexión con el servidor." });
@@ -130,9 +136,9 @@ export function useRealtimeData() {
         ackPendientesRef.current.delete(clienteOrderId);
         resolve({ ejecutado: false, error: "Tiempo de espera agotado." });
       }, 6000);
-      ackPendientesRef.current.set(clienteOrderId, (ejecutado, error) => {
+      ackPendientesRef.current.set(clienteOrderId, (ejecutado, error, sht35Lectura) => {
         clearTimeout(timeout);
-        resolve({ ejecutado, error });
+        resolve({ ejecutado, error, sht35Lectura });
       });
       wsRef.current.send(JSON.stringify({ tipo: "comando", datos: comando, clienteOrderId }));
     });

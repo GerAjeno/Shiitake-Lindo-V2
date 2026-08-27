@@ -1,6 +1,7 @@
 #include "Tasks.h"
 #include "Config.h"
 #include "OtaManager.h"
+#include "Sht35Direccionador.h" // TEMPORAL, ver Sht35Direccionador.h
 #include <sys/time.h> // struct timeval / settimeofday() — usado al ajustar el reloj desde el RTC
 
 SemaphoreHandle_t g_mutexEstado;
@@ -13,6 +14,8 @@ bool g_loteHistorialListo = false;
 
 SensorManager g_sensores;
 RelayModbusClient g_releClient(Config::PIN_RELE_TX, Config::PIN_RELE_RX, Config::RELE_UART_BAUDIOS, Config::RELE_DIRECCION_MODBUS);
+// TEMPORAL, ver Sht35Direccionador.h — quitar junto con el resto del apartado una vez asignadas las 4 direcciones.
+Sht35Direccionador g_sht35Direccionador(Config::PIN_SHT35_TX, Config::PIN_SHT35_RX, Config::SHT35_UART_BAUDIOS);
 HumidifierController g_humidificador(&g_releClient);
 ConfigCache g_configCache;
 CloudClient g_cloud(&g_configCache, &g_config);
@@ -109,6 +112,7 @@ void iniciarTareas() {
     g_humidificador.inicializar();
     g_humidificador.establecerNotificador(&g_cloud);
     g_configCache.inicializar();
+    g_sht35Direccionador.inicializar(); // TEMPORAL, ver Sht35Direccionador.h
 
     // RTC: si tiene hora válida, se usa para poner el reloj del sistema de inmediato — así
     // timestampIso() (cada muestra del historial) es correcto desde el arranque, sin esperar a
@@ -272,6 +276,12 @@ void tareaControl(void* parametro) {
                 uint8_t canal = cmd.zona == "atriles" ? Config::RELE_CANAL_ATRILES : Config::RELE_CANAL_DESCANSO;
                 bool exito = g_releClient.escribirCanal(canal, cmd.valorBool);
                 g_cloud.enviarAck(cmd.orderId, exito, exito ? "" : "El módulo de relés no confirmó la orden.");
+            } else if (cmd.pendiente && cmd.tipo == "sht35_asignar_direccion") {
+                // TEMPORAL, ver Sht35Direccionador.h.
+                float temperaturaC = 0, humedadPct = 0;
+                String error;
+                bool exito = g_sht35Direccionador.asignarDireccion(cmd.direccionActual, cmd.nuevaDireccion, temperaturaC, humedadPct, error);
+                g_cloud.enviarAckSht35(cmd.orderId, exito, error, temperaturaC, humedadPct);
             } else if (cmd.pendiente) {
                 g_cloud.enviarAck(cmd.orderId, false, "Tipo de comando no reconocido en esta versión.");
             }
