@@ -75,10 +75,11 @@ bool Sht35Direccionador::asignarDireccion(uint8_t direccionActual, uint8_t nueva
 }
 
 bool Sht35Direccionador::leerSensor(uint8_t direccion, float& temperaturaC, float& humedadPct, uint32_t timeoutMs) {
-    // Función 0x04, input registers 0x0000-0x0001 (temperatura, humedad), 2 registros.
+    // Función 0x03 (holding registers — este módulo NO soporta 0x04, confirmado con el manual del
+    // fabricante). Registro 0x0000 = HUMEDAD, 0x0001 = TEMPERATURA (ese orden, no al revés).
     uint8_t lectura[8];
     lectura[0] = direccion;
-    lectura[1] = 0x04;
+    lectura[1] = 0x03;
     lectura[2] = 0x00; lectura[3] = 0x00; // registro inicial 0x0000
     lectura[4] = 0x00; lectura[5] = 0x02; // cantidad: 2 registros
     uint16_t crcLectura = crc16Modbus(lectura, 6);
@@ -87,8 +88,8 @@ bool Sht35Direccionador::leerSensor(uint8_t direccion, float& temperaturaC, floa
 
     enviarTrama(lectura, sizeof(lectura));
 
-    uint8_t respLectura[9]; // dirección, función, byteCount(4), tempHi, tempLo, humHi, humLo, crcLo, crcHi
-    if (!leerRespuesta(respLectura, sizeof(respLectura), timeoutMs) || respLectura[0] != direccion || respLectura[1] != 0x04 || respLectura[2] != 4) {
+    uint8_t respLectura[9]; // dirección, función, byteCount(4), humHi, humLo, tempHi, tempLo, crcLo, crcHi
+    if (!leerRespuesta(respLectura, sizeof(respLectura), timeoutMs) || respLectura[0] != direccion || respLectura[1] != 0x03 || respLectura[2] != 4) {
         return false;
     }
     uint16_t crcRecibido = (uint16_t(respLectura[8]) << 8) | respLectura[7];
@@ -96,10 +97,10 @@ bool Sht35Direccionador::leerSensor(uint8_t direccion, float& temperaturaC, floa
         return false; // CRC inválido — probable ruido eléctrico en el bus, no un sensor real respondiendo
     }
 
-    int16_t tempCruda = (int16_t(respLectura[3]) << 8) | respLectura[4];
-    uint16_t humCruda = (uint16_t(respLectura[5]) << 8) | respLectura[6];
-    temperaturaC = tempCruda / 10.0f;
+    uint16_t humCruda = (uint16_t(respLectura[3]) << 8) | respLectura[4];
+    int16_t tempCruda = (int16_t(respLectura[5]) << 8) | respLectura[6];
     humedadPct = humCruda / 10.0f;
+    temperaturaC = tempCruda / 10.0f;
     return true;
 }
 
