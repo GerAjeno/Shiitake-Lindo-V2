@@ -33,7 +33,7 @@ export function useRealtimeData() {
   // referencia, el segundo comando pisaba el resolver del primero y el ACK equivocado resolvía la
   // promesa equivocada.
   const ackPendientesRef = useRef<
-    Map<string, (ejecutado: boolean, error?: string, sht35Lectura?: { temperaturaC: number; humedadPct: number }) => void>
+    Map<string, (ejecutado: boolean, error?: string, sht35Lectura?: { temperaturaC: number; humedadPct: number; direccion: number }) => void>
   >(new Map());
 
   // Snapshot inicial por REST (config + alertas no dependen del WS para la primera carga).
@@ -124,7 +124,7 @@ export function useRealtimeData() {
   const enviarComando = useCallback((comando: TipoComandoManual): Promise<{
     ejecutado: boolean;
     error?: string;
-    sht35Lectura?: { temperaturaC: number; humedadPct: number };
+    sht35Lectura?: { temperaturaC: number; humedadPct: number; direccion: number };
   }> => {
     return new Promise((resolve) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {

@@ -281,7 +281,15 @@ void tareaControl(void* parametro) {
                 float temperaturaC = 0, humedadPct = 0;
                 String error;
                 bool exito = g_sht35Direccionador.asignarDireccion(cmd.direccionActual, cmd.nuevaDireccion, temperaturaC, humedadPct, error);
-                g_cloud.enviarAckSht35(cmd.orderId, exito, error, temperaturaC, humedadPct);
+                g_cloud.enviarAckSht35(cmd.orderId, exito, error, cmd.nuevaDireccion, temperaturaC, humedadPct);
+            } else if (cmd.pendiente && cmd.tipo == "sht35_leer_direccion") {
+                // TEMPORAL, ver Sht35Direccionador.h.
+                uint8_t direccionEncontrada = 0;
+                float temperaturaC = 0, humedadPct = 0;
+                bool exito = g_sht35Direccionador.escanearDireccion(1, 10, direccionEncontrada, temperaturaC, humedadPct);
+                g_cloud.enviarAckSht35(cmd.orderId, exito,
+                                       exito ? "" : "Ningún sensor respondió en las direcciones 1-10 (revisá cableado A+/B+, alimentación y que haya un solo sensor conectado).",
+                                       direccionEncontrada, temperaturaC, humedadPct);
             } else if (cmd.pendiente) {
                 g_cloud.enviarAck(cmd.orderId, false, "Tipo de comando no reconocido en esta versión.");
             }

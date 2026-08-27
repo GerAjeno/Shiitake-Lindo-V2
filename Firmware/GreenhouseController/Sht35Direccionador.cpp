@@ -65,9 +65,19 @@ bool Sht35Direccionador::asignarDireccion(uint8_t direccionActual, uint8_t nueva
     delay(300); // algunos módulos tardan en aplicar la nueva dirección antes de volver a responder
 
     // Paso 2: leer temperatura/humedad en la NUEVA dirección para confirmar que fue el sensor
-    // correcto el que cambió (función 0x04, input registers 0x0000-0x0001, 2 registros).
+    // correcto el que cambió.
+    if (!leerSensor(nuevaDireccion, temperaturaC, humedadPct)) {
+        error = "Se asignó la dirección " + String(nuevaDireccion) + ", pero el sensor no respondió a la "
+                "lectura de verificación en esa dirección.";
+        return false;
+    }
+    return true;
+}
+
+bool Sht35Direccionador::leerSensor(uint8_t direccion, float& temperaturaC, float& humedadPct, uint32_t timeoutMs) {
+    // Función 0x04, input registers 0x0000-0x0001 (temperatura, humedad), 2 registros.
     uint8_t lectura[8];
-    lectura[0] = nuevaDireccion;
+    lectura[0] = direccion;
     lectura[1] = 0x04;
     lectura[2] = 0x00; lectura[3] = 0x00; // registro inicial 0x0000
     lectura[4] = 0x00; lectura[5] = 0x02; // cantidad: 2 registros
@@ -78,15 +88,12 @@ bool Sht35Direccionador::asignarDireccion(uint8_t direccionActual, uint8_t nueva
     enviarTrama(lectura, sizeof(lectura));
 
     uint8_t respLectura[9]; // dirección, función, byteCount(4), tempHi, tempLo, humHi, humLo, crcLo, crcHi
-    if (!leerRespuesta(respLectura, sizeof(respLectura)) || respLectura[0] != nuevaDireccion || respLectura[1] != 0x04 || respLectura[2] != 4) {
-        error = "Se asignó la dirección " + String(nuevaDireccion) + ", pero el sensor no respondió a la "
-                "lectura de verificación en esa dirección.";
+    if (!leerRespuesta(respLectura, sizeof(respLectura), timeoutMs) || respLectura[0] != direccion || respLectura[1] != 0x04 || respLectura[2] != 4) {
         return false;
     }
     uint16_t crcRecibido = (uint16_t(respLectura[8]) << 8) | respLectura[7];
     if (crc16Modbus(respLectura, 7) != crcRecibido) {
-        error = "Lectura de verificación con CRC inválido — puede haber ruido eléctrico en el bus.";
-        return false;
+        return false; // CRC inválido — probable ruido eléctrico en el bus, no un sensor real respondiendo
     }
 
     int16_t tempCruda = (int16_t(respLectura[3]) << 8) | respLectura[4];
@@ -94,4 +101,19 @@ bool Sht35Direccionador::asignarDireccion(uint8_t direccionActual, uint8_t nueva
     temperaturaC = tempCruda / 10.0f;
     humedadPct = humCruda / 10.0f;
     return true;
+}
+
+bool Sht35Direccionador::escanearDireccion(uint8_t direccionMin, uint8_t direccionMax,
+                                            uint8_t& direccionEncontrada, float& temperaturaC, float& humedadPct) {
+    // Timeout corto por intento (200ms): con un solo sensor en el bus, la mayoría de las
+    // direcciones probadas no van a responder, y este método corre dentro del loop de control —
+    // no conviene bloquearlo más de lo necesario.
+    for (uint8_t direccion = direccionMin; direccion <= direccionMax; direccion++) {
+        if (leerSensor(direccion, temperaturaC, humedadPct, 200)) {
+            direccionEncontrada = direccion;
+            return true;
+        }
+        if (direccion == direccionMax) break; // evita overflow si direccionMax == 255
+    }
+    return false;
 }

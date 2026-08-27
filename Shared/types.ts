@@ -146,7 +146,10 @@ export type TipoComandoManual =
   // SHT35-RS485 (vienen todos de fábrica en la dirección 1, sin DIP switches para cambiarla).
   // Se conecta un solo sensor físico al bus por vez. Quitar junto con el resto del apartado
   // "Configuración de sensores SHT35" (ver settings/page.tsx) una vez asignadas las 4 direcciones.
-  | { tipo: 'sht35_asignar_direccion'; direccionActual: number; nuevaDireccion: number };
+  | { tipo: 'sht35_asignar_direccion'; direccionActual: number; nuevaDireccion: number }
+  // TEMPORAL: ver arriba — escanea direcciones 1-10 y devuelve la primera que responda, para
+  // saber en qué dirección está el único sensor conectado cuando "asignar" falla.
+  | { tipo: 'sht35_leer_direccion' };
 
 export interface ComandoManual {
   orderId: string; // uuid, generado por el backend
@@ -162,7 +165,7 @@ export interface AckComando {
   // TEMPORAL: ver TipoComandoManual['sht35_asignar_direccion'] arriba — lectura de verificación
   // (función Modbus 0x04) hecha en la nueva dirección tras escribirla, para confirmar en la web
   // que el sensor correcto respondió antes de pasar al siguiente.
-  sht35Lectura?: { temperaturaC: number; humedadPct: number };
+  sht35Lectura?: { temperaturaC: number; humedadPct: number; direccion: number };
 }
 
 export interface EstadoOta {

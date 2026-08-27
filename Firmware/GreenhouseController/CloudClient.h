@@ -60,7 +60,7 @@ public:
     void enviarLoteHistorial(String jsonLote); // ya serializado por Tasks.cpp; por valor: WebSocketsClient::sendTXT() exige String& no-const
     void enviarAck(const String& orderId, bool ejecutado, const String& error = "");
     // TEMPORAL: ver Sht35Direccionador.h.
-    void enviarAckSht35(const String& orderId, bool ejecutado, const String& error, float temperaturaC, float humedadPct);
+    void enviarAckSht35(const String& orderId, bool ejecutado, const String& error, uint8_t direccion, float temperaturaC, float humedadPct);
 
     // INotificadorEventos
     // `tipo` debe ser uno de: INFO, ADVERTENCIA, CRITICA (ver TIPOS_ALERTA en Shared/types.ts).

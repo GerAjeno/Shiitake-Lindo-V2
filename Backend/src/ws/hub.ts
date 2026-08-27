@@ -104,7 +104,7 @@ export function enviarOtaADispositivo(estadoOta: import('../shared/types').Estad
  */
 export async function enviarComandoADispositivo(
   comando: TipoComandoManual
-): Promise<{ ejecutado: boolean; error?: string; sht35Lectura?: { temperaturaC: number; humedadPct: number } }> {
+): Promise<{ ejecutado: boolean; error?: string; sht35Lectura?: { temperaturaC: number; humedadPct: number; direccion: number } }> {
   if (!dispositivoConectado()) {
     return { ejecutado: false, error: 'El dispositivo está desconectado.' };
   }
@@ -112,7 +112,7 @@ export async function enviarComandoADispositivo(
   const orderId = uuid();
   const mensaje: ComandoManual = { orderId, comando, emitidoEn: new Date().toISOString() };
 
-  const resultado = new Promise<{ ejecutado: boolean; error?: string; sht35Lectura?: { temperaturaC: number; humedadPct: number } }>((resolve) => {
+  const resultado = new Promise<{ ejecutado: boolean; error?: string; sht35Lectura?: { temperaturaC: number; humedadPct: number; direccion: number } }>((resolve) => {
     const timeout = setTimeout(() => {
       comandosPendientes.delete(orderId);
       resolve({ ejecutado: false, error: 'El dispositivo no confirmó la orden en 5 segundos.' });
@@ -372,13 +372,14 @@ export function iniciarWebSocketHub(server: http.Server) {
 
           const esHumidificadorValido =
             c?.tipo === 'humidificador' && (c.zona === 'atriles' || c.zona === 'descanso') && typeof c.encender === 'boolean';
-          // TEMPORAL: ver TipoComandoManual['sht35_asignar_direccion'] en Shared/types.ts.
-          const esSht35Valido =
+          // TEMPORAL: ver TipoComandoManual['sht35_asignar_direccion'/'sht35_leer_direccion'] en Shared/types.ts.
+          const esSht35AsignarValido =
             c?.tipo === 'sht35_asignar_direccion' &&
             typeof c.direccionActual === 'number' && c.direccionActual >= 1 && c.direccionActual <= 247 &&
             typeof c.nuevaDireccion === 'number' && c.nuevaDireccion >= 1 && c.nuevaDireccion <= 247;
+          const esSht35LeerValido = c?.tipo === 'sht35_leer_direccion';
 
-          if (!esHumidificadorValido && !esSht35Valido) {
+          if (!esHumidificadorValido && !esSht35AsignarValido && !esSht35LeerValido) {
             enviarANavegador(cliente, { tipo: 'ack', datos: { orderId: clienteOrderId, ejecutado: false, error: 'Comando inválido.' } });
             return;
           }

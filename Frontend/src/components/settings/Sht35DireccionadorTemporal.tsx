@@ -12,14 +12,14 @@
  */
 
 import { useState } from "react";
-import { Wrench, Loader2 } from "lucide-react";
+import { Wrench, Loader2, Search } from "lucide-react";
 import type { TipoComandoManual } from "@shared/types";
 
 interface Props {
   enviarComando: (comando: TipoComandoManual) => Promise<{
     ejecutado: boolean;
     error?: string;
-    sht35Lectura?: { temperaturaC: number; humedadPct: number };
+    sht35Lectura?: { temperaturaC: number; humedadPct: number; direccion: number };
   }>;
 }
 
@@ -27,6 +27,7 @@ export function Sht35DireccionadorTemporal({ enviarComando }: Props) {
   const [direccionActual, setDireccionActual] = useState(1);
   const [nuevaDireccion, setNuevaDireccion] = useState(1);
   const [enviando, setEnviando] = useState(false);
+  const [escaneando, setEscaneando] = useState(false);
   const [resultado, setResultado] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const asignar = async () => {
@@ -44,6 +45,22 @@ export function Sht35DireccionadorTemporal({ enviarComando }: Props) {
     setEnviando(false);
   };
 
+  const leerDireccion = async () => {
+    setEscaneando(true);
+    setResultado(null);
+    const r = await enviarComando({ tipo: "sht35_leer_direccion" });
+    if (r.ejecutado && r.sht35Lectura) {
+      setResultado({
+        ok: true,
+        texto: `El sensor conectado responde en la dirección ${r.sht35Lectura.direccion} (${r.sht35Lectura.temperaturaC.toFixed(1)}°C, ${r.sht35Lectura.humedadPct.toFixed(1)}% HR). Usá ese valor como "Dirección actual" abajo.`,
+      });
+      setDireccionActual(r.sht35Lectura.direccion);
+    } else {
+      setResultado({ ok: false, texto: r.error ?? "Falló sin detalle." });
+    }
+    setEscaneando(false);
+  };
+
   return (
     <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10 p-4 space-y-3">
       <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
@@ -55,6 +72,19 @@ export function Sht35DireccionadorTemporal({ enviarComando }: Props) {
         con dirección <strong>1</strong> — asignale una definitiva (1-4), verificá la lectura, desconectalo,
         y repetí con el siguiente.
       </p>
+      <div>
+        <button
+          onClick={leerDireccion} disabled={escaneando}
+          className="flex items-center gap-2 rounded-lg border border-amber-500/50 hover:bg-amber-500/10 disabled:opacity-50 text-amber-700 dark:text-amber-300 px-3 py-1.5 text-xs font-mono font-bold"
+        >
+          {escaneando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+          Leer dirección del sensor conectado
+        </button>
+        <p className="text-[11px] text-slate-500 dark:text-slate-500 font-mono mt-1">
+          Prueba direcciones 1 a 10 y muestra la primera que responda — usalo si "Asignar dirección" falla,
+          para confirmar en qué dirección está realmente el sensor.
+        </p>
+      </div>
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs font-mono text-slate-600 dark:text-slate-400">
           Dirección actual del sensor

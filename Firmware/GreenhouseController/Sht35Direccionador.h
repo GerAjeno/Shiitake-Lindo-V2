@@ -34,6 +34,18 @@ public:
     bool asignarDireccion(uint8_t direccionActual, uint8_t nuevaDireccion,
                            float& temperaturaC, float& humedadPct, String& error);
 
+    /** Lee temperatura/humedad (función 0x04) en una dirección puntual. */
+    bool leerSensor(uint8_t direccion, float& temperaturaC, float& humedadPct, uint32_t timeoutMs = 400);
+
+    /**
+     * Prueba direcciones de `direccionMin` a `direccionMax` (inclusive) y devuelve la primera que
+     * responda — sirve para averiguar en qué dirección está el único sensor conectado al bus
+     * cuando `asignarDireccion` falla (por ejemplo, si el sensor no viene de fábrica en `1` como
+     * asume el resto de esta herramienta).
+     */
+    bool escanearDireccion(uint8_t direccionMin, uint8_t direccionMax,
+                            uint8_t& direccionEncontrada, float& temperaturaC, float& humedadPct);
+
 private:
     uint8_t _pinTx, _pinRx;
     uint32_t _baudios;

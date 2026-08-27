@@ -253,7 +253,7 @@ void CloudClient::enviarAck(const String& orderId, bool ejecutado, const String&
 // TEMPORAL: ver Sht35Direccionador.h — igual que enviarAck() pero además adjunta la lectura de
 // verificación (temperatura/humedad) para que la web confirme que fue el sensor correcto.
 void CloudClient::enviarAckSht35(const String& orderId, bool ejecutado, const String& error,
-                                  float temperaturaC, float humedadPct) {
+                                  uint8_t direccion, float temperaturaC, float humedadPct) {
     JsonDocument doc;
     doc["tipo"] = "ack";
     JsonObject d = doc["datos"].to<JsonObject>();
@@ -262,6 +262,7 @@ void CloudClient::enviarAckSht35(const String& orderId, bool ejecutado, const St
     if (error.length() > 0) d["error"] = error;
     if (ejecutado) {
         JsonObject lectura = d["sht35Lectura"].to<JsonObject>();
+        lectura["direccion"] = direccion;
         lectura["temperaturaC"] = temperaturaC;
         lectura["humedadPct"] = humedadPct;
     }
