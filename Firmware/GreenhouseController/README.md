@@ -12,12 +12,11 @@ ninguna clase del firmware anterior.
 
 ## Librerías a instalar (Arduino Library Manager)
 
-- `DHT sensor library` (Adafruit) + `Adafruit Unified Sensor` (dependencia)
 - `ArduinoJson` (v7.x)
 - `WebSockets` (Links2004 / arduinoWebSockets) — usado por `CloudClient`
 - `Crypto` (rweather) — provee `Ed25519.h`, usado por `OtaManager` para verificar la firma del firmware
 
-El resto (`WiFi`, `HTTPClient`, `WiFiClientSecure`, `Preferences`, `Wire`, `mbedtls/*`, `esp_ota_ops.h`) viene incluido en el core `esp32` de Arduino.
+El resto (`WiFi`, `HTTPClient`, `WiFiClientSecure`, `Preferences`, `Wire`, `mbedtls/*`, `esp_ota_ops.h`) viene incluido en el core `esp32` de Arduino. Los sensores de humedad/temperatura (SHT35-RS485) y el módulo de relés se leen por Modbus RTU implementado a mano sobre `Serial1`/`Serial2` — no hace falta ninguna librería Modbus externa.
 
 ## Antes de compilar
 
@@ -25,7 +24,6 @@ Editar `Config.h` y reemplazar:
 1. `WIFI_SSID_DEFAULT` / `WIFI_PASSWORD_DEFAULT` — credenciales reales del invernadero.
 2. `ID_DISPOSITIVO` / `DEVICE_TOKEN` — generados con `npm run dispositivo:provisionar` en `Backend/`.
 3. `OTA_PUBLIC_KEY_ED25519` — generada con `npm run ota:generar-clave` en `Backend/`.
-4. `AC_ATRILES_DEVICE_ID` / `AC_ATRILES_TOKEN` / `AC_ATRILES_KEY` y los equivalentes de Descanso — obtenidos con `get_ac_credentials.sh` (ver README de la raíz del proyecto original) — y también las **IPs reales** de ambos equipos en `Tasks.cpp` (`g_acController(...)`, hoy con `"0.0.0.0"` como placeholder).
 
 **No commitear** `Config.h` con las credenciales reales rellenas — o usar `git update-index --skip-worktree Config.h` en el servidor para evitar subirlo por accidente.
 
@@ -48,5 +46,4 @@ Editar `Config.h` y reemplazar:
 
 ## Limitaciones conocidas (documentadas, no bloqueantes para hoy)
 
-- Descubrimiento de los AC Midea por IP estática (sin reserva DHCP posible): si el router les cambia la IP, hay que actualizar `Tasks.cpp` manualmente.
 - El rollback automático de OTA depende de que el bootloader del board package tenga habilitado `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE` (ver comentario en `OtaManager.h`). El reflasheo manual por USB sigue siendo el respaldo real para hoy.

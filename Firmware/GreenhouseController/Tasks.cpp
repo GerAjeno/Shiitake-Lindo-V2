@@ -260,6 +260,7 @@ void tareaControl(void* parametro) {
     (void)parametro;
 
     for (;;) {
+        ComandoEntrante cmd; // cmd.pendiente = false por defecto si no se toma el mutex esta vuelta
         if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) == pdTRUE) {
             ResultadoZonaDHT at = g_sensores.calcularAtriles();
             ResultadoZonaDHT de = g_sensores.calcularDescanso();
@@ -271,27 +272,16 @@ void tareaControl(void* parametro) {
             digitalWrite(Config::PIN_LED_ATRILES, g_humidificador.estadoAtriles() ? HIGH : LOW);
             digitalWrite(Config::PIN_LED_DESCANSO, g_humidificador.estadoDescanso() ? HIGH : LOW);
 
-            // Aplicar comando manual pendiente recibido por WS.
-            ComandoEntrante cmd = g_cloud.tomarComandoPendiente();
+            // Aplicar comando manual pendiente recibido por WS. tomarComandoPendiente() necesita el
+            // mutex (lee _comandoPendiente, escrito por CloudClient en el otro núcleo bajo el mismo
+            // lock) — pero la ejecución de los comandos SHT35 (I/O Modbus lenta, hasta 2s) se hace
+            // MÁS ABAJO, ya sin el mutex tomado (ver comentario ahí).
+            cmd = g_cloud.tomarComandoPendiente();
             if (cmd.pendiente && cmd.tipo == "humidificador") {
                 uint8_t canal = cmd.zona == "atriles" ? Config::RELE_CANAL_ATRILES : Config::RELE_CANAL_DESCANSO;
                 bool exito = g_releClient.escribirCanal(canal, cmd.valorBool);
                 g_cloud.enviarAck(cmd.orderId, exito, exito ? "" : "El módulo de relés no confirmó la orden.");
-            } else if (cmd.pendiente && cmd.tipo == "sht35_asignar_direccion") {
-                // TEMPORAL, ver Sht35Direccionador.h.
-                float temperaturaC = 0, humedadPct = 0;
-                String error;
-                bool exito = g_sht35Direccionador.asignarDireccion(cmd.direccionActual, cmd.nuevaDireccion, temperaturaC, humedadPct, error);
-                g_cloud.enviarAckSht35(cmd.orderId, exito, error, cmd.nuevaDireccion, temperaturaC, humedadPct);
-            } else if (cmd.pendiente && cmd.tipo == "sht35_leer_direccion") {
-                // TEMPORAL, ver Sht35Direccionador.h.
-                uint8_t direccionEncontrada = 0;
-                float temperaturaC = 0, humedadPct = 0;
-                bool exito = g_sht35Direccionador.escanearDireccion(1, 10, direccionEncontrada, temperaturaC, humedadPct);
-                g_cloud.enviarAckSht35(cmd.orderId, exito,
-                                       exito ? "" : "Ningún sensor respondió en las direcciones 1-10 (revisá cableado A+/B+, alimentación y que haya un solo sensor conectado).",
-                                       direccionEncontrada, temperaturaC, humedadPct);
-            } else if (cmd.pendiente) {
+            } else if (cmd.pendiente && cmd.tipo != "sht35_asignar_direccion" && cmd.tipo != "sht35_leer_direccion") {
                 g_cloud.enviarAck(cmd.orderId, false, "Tipo de comando no reconocido en esta versión.");
             }
 
@@ -315,6 +305,25 @@ void tareaControl(void* parametro) {
             g_telemetria.firmwareVersion = Config::FIRMWARE_VERSION;
 
             xSemaphoreGive(g_mutexEstado);
+        }
+
+        // TEMPORAL, ver Sht35Direccionador.h. A propósito FUERA del mutex de estado (arriba): esta
+        // I/O Modbus puede tardar hasta 2s (escanearDireccion prueba 10 direcciones), y sostener
+        // g_mutexEstado ese tiempo bloqueaba la recepción de mensajes WS entrantes — que lo piden
+        // con un timeout corto de 500ms (ver CloudClient::procesarMensajeEntrante) — provocando que
+        // el backend descartara comandos nuevos mientras corría un escaneo sin respuesta.
+        if (cmd.pendiente && cmd.tipo == "sht35_asignar_direccion") {
+            float temperaturaC = 0, humedadPct = 0;
+            String error;
+            bool exito = g_sht35Direccionador.asignarDireccion(cmd.direccionActual, cmd.nuevaDireccion, temperaturaC, humedadPct, error);
+            g_cloud.enviarAckSht35(cmd.orderId, exito, error, cmd.nuevaDireccion, temperaturaC, humedadPct);
+        } else if (cmd.pendiente && cmd.tipo == "sht35_leer_direccion") {
+            uint8_t direccionEncontrada = 0;
+            float temperaturaC = 0, humedadPct = 0;
+            bool exito = g_sht35Direccionador.escanearDireccion(1, 10, direccionEncontrada, temperaturaC, humedadPct);
+            g_cloud.enviarAckSht35(cmd.orderId, exito,
+                                   exito ? "" : "Ningún sensor respondió en las direcciones 1-10 (revisá cableado A+/B+, alimentación y que haya un solo sensor conectado).",
+                                   direccionEncontrada, temperaturaC, humedadPct);
         }
 
         vTaskDelay(pdMS_TO_TICKS(1000));
