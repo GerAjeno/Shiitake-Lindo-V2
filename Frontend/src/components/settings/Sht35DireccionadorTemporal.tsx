@@ -96,12 +96,11 @@ export function Sht35DireccionadorTemporal({ enviarComando }: Props) {
         </label>
         <label className="flex flex-col gap-1 text-xs font-mono text-slate-600 dark:text-slate-400">
           Nueva dirección
-          <select
-            value={nuevaDireccion} onChange={(e) => setNuevaDireccion(Number(e.target.value))}
+          <input
+            type="number" min={1} max={247} value={nuevaDireccion}
+            onChange={(e) => setNuevaDireccion(Number(e.target.value))}
             className="w-28 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm font-mono"
-          >
-            {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+          />
         </label>
         <button
           onClick={asignar} disabled={enviando}
