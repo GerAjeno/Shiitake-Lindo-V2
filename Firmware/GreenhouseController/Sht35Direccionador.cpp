@@ -29,7 +29,7 @@ void Sht35Direccionador::enviarTrama(const uint8_t* trama, size_t longitud) {
     // nadie la reconoce. Confirmado en campo: con varios sensores en el bus, siempre fallaba
     // justo el que quedaba después de uno que SÍ había contestado (nunca el que seguía a un
     // timeout/silencio, donde el adaptador nunca entró en modo recepción).
-    vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(pdMS_TO_TICKS(200)); // DIAGNÓSTICO: subido de 20 a 200ms para confirmar/descartar turnaround como causa
     while (Serial2.available()) Serial2.read(); // limpiar basura pendiente antes de transmitir
     Serial2.write(trama, longitud);
     Serial2.flush();
