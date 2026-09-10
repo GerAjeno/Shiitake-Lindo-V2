@@ -317,6 +317,13 @@ void tareaControl(void* parametro) {
             String error;
             bool exito = g_sht35Direccionador.asignarDireccion(cmd.direccionActual, cmd.nuevaDireccion, temperaturaC, humedadPct, error);
             g_cloud.enviarAckSht35(cmd.orderId, exito, error, cmd.nuevaDireccion, temperaturaC, humedadPct);
+        } else if (cmd.pendiente && cmd.tipo == "sht35_leer_direccion" && cmd.direccionActual != 0) {
+            // Con dirección puntual: lee directo, sin escanear (más rápido, no toca nada del sensor).
+            float temperaturaC = 0, humedadPct = 0;
+            bool exito = g_sht35Direccionador.leerSensor(cmd.direccionActual, temperaturaC, humedadPct);
+            g_cloud.enviarAckSht35(cmd.orderId, exito,
+                                   exito ? "" : ("El sensor en la dirección " + String(cmd.direccionActual) + " no respondió."),
+                                   cmd.direccionActual, temperaturaC, humedadPct);
         } else if (cmd.pendiente && cmd.tipo == "sht35_leer_direccion") {
             uint8_t direccionEncontrada = 0;
             float temperaturaC = 0, humedadPct = 0;

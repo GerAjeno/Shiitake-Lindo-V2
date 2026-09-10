@@ -147,9 +147,11 @@ export type TipoComandoManual =
   // Se conecta un solo sensor físico al bus por vez. Quitar junto con el resto del apartado
   // "Configuración de sensores SHT35" (ver settings/page.tsx) una vez asignadas las 4 direcciones.
   | { tipo: 'sht35_asignar_direccion'; direccionActual: number; nuevaDireccion: number }
-  // TEMPORAL: ver arriba — escanea direcciones 1-10 y devuelve la primera que responda, para
-  // saber en qué dirección está el único sensor conectado cuando "asignar" falla.
-  | { tipo: 'sht35_leer_direccion' }
+  // TEMPORAL: ver arriba. Sin `direccion`: escanea 1-10 y devuelve la primera que responda (para
+  // saber en qué dirección está el único sensor conectado cuando "asignar" falla). Con `direccion`:
+  // lee esa dirección puntual directo, sin escanear — para verificar un sensor específico sin
+  // tener que pasar por "asignar mismo→mismo".
+  | { tipo: 'sht35_leer_direccion'; direccion?: number }
   // PERMANENTE (a diferencia de los dos de arriba): corrige el offset de fábrica de un sensor
   // puntual, escribiendo el registro de corrección de humedad/temperatura del propio SHT35 (ver
   // Sht35Direccionador::calibrar). `correccion` en las mismas unidades que la lectura (%RH o °C).

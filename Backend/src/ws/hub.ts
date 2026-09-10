@@ -378,7 +378,9 @@ export function iniciarWebSocketHub(server: http.Server) {
             c?.tipo === 'sht35_asignar_direccion' &&
             typeof c.direccionActual === 'number' && c.direccionActual >= 1 && c.direccionActual <= 247 &&
             typeof c.nuevaDireccion === 'number' && c.nuevaDireccion >= 1 && c.nuevaDireccion <= 247;
-          const esSht35LeerValido = c?.tipo === 'sht35_leer_direccion';
+          const esSht35LeerValido =
+            c?.tipo === 'sht35_leer_direccion' &&
+            (c.direccion === undefined || (typeof c.direccion === 'number' && c.direccion >= 1 && c.direccion <= 247));
           // PERMANENTE (a diferencia de los dos de arriba) — ver TipoComandoManual['sht35_calibrar'].
           const esSht35CalibrarValido =
             c?.tipo === 'sht35_calibrar' &&

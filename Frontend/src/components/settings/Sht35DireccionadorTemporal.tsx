@@ -26,6 +26,7 @@ interface Props {
 export function Sht35DireccionadorTemporal({ enviarComando }: Props) {
   const [direccionActual, setDireccionActual] = useState(1);
   const [nuevaDireccion, setNuevaDireccion] = useState(1);
+  const [direccionALeer, setDireccionALeer] = useState(""); // vacío = escanear 1-10; con valor = leer esa dirección puntual
   const [enviando, setEnviando] = useState(false);
   const [escaneando, setEscaneando] = useState(false);
   const [resultado, setResultado] = useState<{ ok: boolean; texto: string } | null>(null);
@@ -48,11 +49,14 @@ export function Sht35DireccionadorTemporal({ enviarComando }: Props) {
   const leerDireccion = async () => {
     setEscaneando(true);
     setResultado(null);
-    const r = await enviarComando({ tipo: "sht35_leer_direccion" });
+    const direccion = direccionALeer.trim() === "" ? undefined : Number(direccionALeer);
+    const r = await enviarComando({ tipo: "sht35_leer_direccion", direccion });
     if (r.ejecutado && r.sht35Lectura) {
       setResultado({
         ok: true,
-        texto: `El sensor conectado responde en la dirección ${r.sht35Lectura.direccion} (${r.sht35Lectura.temperaturaC.toFixed(1)}°C, ${r.sht35Lectura.humedadPct.toFixed(1)}% HR). Usá ese valor como "Dirección actual" abajo.`,
+        texto: direccion
+          ? `El sensor en la dirección ${r.sht35Lectura.direccion} respondió: ${r.sht35Lectura.temperaturaC.toFixed(1)}°C, ${r.sht35Lectura.humedadPct.toFixed(1)}% HR.`
+          : `El sensor conectado responde en la dirección ${r.sht35Lectura.direccion} (${r.sht35Lectura.temperaturaC.toFixed(1)}°C, ${r.sht35Lectura.humedadPct.toFixed(1)}% HR). Usá ese valor como "Dirección actual" abajo.`,
       });
       setDireccionActual(r.sht35Lectura.direccion);
     } else {
@@ -72,17 +76,26 @@ export function Sht35DireccionadorTemporal({ enviarComando }: Props) {
         con dirección <strong>1</strong> — asignale una definitiva (1-4), verificá la lectura, desconectalo,
         y repetí con el siguiente.
       </p>
-      <div>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs font-mono text-slate-600 dark:text-slate-400">
+          Dirección puntual (opcional)
+          <input
+            type="number" min={1} max={247} placeholder="vacío = escanear"
+            value={direccionALeer} onChange={(e) => setDireccionALeer(e.target.value)}
+            className="w-40 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-sm font-mono"
+          />
+        </label>
         <button
           onClick={leerDireccion} disabled={escaneando}
           className="flex items-center gap-2 rounded-lg border border-amber-500/50 hover:bg-amber-500/10 disabled:opacity-50 text-amber-700 dark:text-amber-300 px-3 py-1.5 text-xs font-mono font-bold"
         >
           {escaneando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-          Leer dirección del sensor conectado
+          {direccionALeer.trim() === "" ? "Leer dirección del sensor conectado" : `Leer dirección ${direccionALeer}`}
         </button>
-        <p className="text-[11px] text-slate-500 dark:text-slate-500 font-mono mt-1">
-          Prueba direcciones 1 a 10 y muestra la primera que responda — usalo si "Asignar dirección" falla,
-          para confirmar en qué dirección está realmente el sensor.
+        <p className="text-[11px] text-slate-500 dark:text-slate-500 font-mono w-full">
+          Dejá el campo vacío para escanear direcciones 1 a 10 (sirve si "Asignar dirección" falla y no sabés
+          en qué dirección está el sensor). Poné un número para leer esa dirección puntual directo, sin escanear
+          — útil para verificar un sensor específico sin tocar nada.
         </p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
