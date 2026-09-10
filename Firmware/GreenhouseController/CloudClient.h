@@ -27,12 +27,13 @@
 struct ComandoEntrante {
     bool pendiente = false;
     String orderId;
-    String tipo;   // "humidificador" | "sht35_asignar_direccion" (TEMPORAL, ver Sht35Direccionador.h)
+    String tipo;   // "humidificador" | "sht35_asignar_direccion"/"sht35_leer_direccion" (TEMPORAL) | "sht35_calibrar" (PERMANENTE)
     String zona;   // "atriles" | "descanso"
     bool valorBool = false;
+    // Para tipo == "sht35_calibrar": valorFloat = correccion, valorTexto = variable ("humedad"/"temperatura").
     float valorFloat = 0;
     String valorTexto;
-    // TEMPORAL: solo para tipo == "sht35_asignar_direccion".
+    // Para tipo == "sht35_asignar_direccion" (TEMPORAL) y "sht35_calibrar" (PERMANENTE, como `direccion`).
     uint8_t direccionActual = 0;
     uint8_t nuevaDireccion = 0;
 };

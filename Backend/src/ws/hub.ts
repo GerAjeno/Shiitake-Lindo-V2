@@ -365,6 +365,7 @@ export function iniciarWebSocketHub(server: http.Server) {
           const c = mensaje.datos as unknown as {
             tipo?: unknown; zona?: unknown; encender?: unknown;
             direccionActual?: unknown; nuevaDireccion?: unknown;
+            direccion?: unknown; variable?: unknown; correccion?: unknown;
           };
           // Id generado por el navegador para correlacionar la respuesta con el comando que la
           // originó (puede haber más de uno en vuelo: cada tarjeta de zona tiene su propio botón).
@@ -378,8 +379,14 @@ export function iniciarWebSocketHub(server: http.Server) {
             typeof c.direccionActual === 'number' && c.direccionActual >= 1 && c.direccionActual <= 247 &&
             typeof c.nuevaDireccion === 'number' && c.nuevaDireccion >= 1 && c.nuevaDireccion <= 247;
           const esSht35LeerValido = c?.tipo === 'sht35_leer_direccion';
+          // PERMANENTE (a diferencia de los dos de arriba) — ver TipoComandoManual['sht35_calibrar'].
+          const esSht35CalibrarValido =
+            c?.tipo === 'sht35_calibrar' &&
+            typeof c.direccion === 'number' && c.direccion >= 1 && c.direccion <= 247 &&
+            (c.variable === 'humedad' || c.variable === 'temperatura') &&
+            typeof c.correccion === 'number' && Number.isFinite(c.correccion) && Math.abs(c.correccion) <= 50;
 
-          if (!esHumidificadorValido && !esSht35AsignarValido && !esSht35LeerValido) {
+          if (!esHumidificadorValido && !esSht35AsignarValido && !esSht35LeerValido && !esSht35CalibrarValido) {
             enviarANavegador(cliente, { tipo: 'ack', datos: { orderId: clienteOrderId, ejecutado: false, error: 'Comando inválido.' } });
             return;
           }

@@ -171,6 +171,11 @@ void CloudClient::procesarMensajeEntrante(const String& json) {
         // TEMPORAL: ver Sht35Direccionador.h.
         if (!c["direccionActual"].isNull()) _comandoPendiente.direccionActual = c["direccionActual"];
         if (!c["nuevaDireccion"].isNull()) _comandoPendiente.nuevaDireccion = c["nuevaDireccion"];
+        // PERMANENTE: ver TipoComandoManual['sht35_calibrar'] en Shared/types.ts. Reusa
+        // direccionActual/valorTexto/valorFloat en vez de agregar campos nuevos al struct.
+        if (!c["direccion"].isNull()) _comandoPendiente.direccionActual = c["direccion"];
+        if (!c["variable"].isNull()) _comandoPendiente.valorTexto = c["variable"].as<String>();
+        if (!c["correccion"].isNull()) _comandoPendiente.valorFloat = c["correccion"];
         _comandoPendiente.pendiente = true;
 
     } else if (tipoMsg == "ota") {

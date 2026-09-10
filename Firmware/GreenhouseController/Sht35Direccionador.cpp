@@ -130,6 +130,48 @@ bool Sht35Direccionador::leerSensorSinBloqueo(uint8_t direccion, float& temperat
     return true;
 }
 
+bool Sht35Direccionador::calibrar(uint8_t direccion, bool esHumedad, float correccion,
+                                   float& temperaturaC, float& humedadPct, String& error) {
+    if (xSemaphoreTake(_mutexBus, pdMS_TO_TICKS(2000)) != pdTRUE) {
+        error = "El bus RS485 está ocupado, intentá de nuevo.";
+        return false;
+    }
+
+    uint16_t registro = esHumedad ? 0x0105 : 0x0104;
+    // Mismo formato que la medición: entero con signo, x10 (ej. -11.5 -> -115).
+    int16_t valorCrudo = (int16_t)lroundf(correccion * 10.0f);
+
+    uint8_t escritura[8];
+    escritura[0] = direccion;
+    escritura[1] = 0x06;
+    escritura[2] = highByte(registro);
+    escritura[3] = lowByte(registro);
+    escritura[4] = highByte((uint16_t)valorCrudo);
+    escritura[5] = lowByte((uint16_t)valorCrudo);
+    uint16_t crcEscritura = crc16Modbus(escritura, 6);
+    escritura[6] = lowByte(crcEscritura);
+    escritura[7] = highByte(crcEscritura);
+
+    enviarTrama(escritura, sizeof(escritura));
+
+    uint8_t respEscritura[8];
+    if (!leerRespuesta(respEscritura, sizeof(respEscritura)) || memcmp(escritura, respEscritura, sizeof(escritura)) != 0) {
+        error = "El sensor en la dirección " + String(direccion) + " no confirmó la corrección.";
+        xSemaphoreGive(_mutexBus);
+        return false;
+    }
+
+    delay(300); // mismo respiro que asignarDireccion() — algunos módulos tardan en aplicar el cambio
+
+    if (!leerSensorSinBloqueo(direccion, temperaturaC, humedadPct, 400)) {
+        error = "Se aplicó la corrección, pero el sensor no respondió al releer para confirmar.";
+        xSemaphoreGive(_mutexBus);
+        return false;
+    }
+    xSemaphoreGive(_mutexBus);
+    return true;
+}
+
 bool Sht35Direccionador::escanearDireccion(uint8_t direccionMin, uint8_t direccionMax,
                                             uint8_t& direccionEncontrada, float& temperaturaC, float& humedadPct) {
     // Timeout corto por intento (200ms): con un solo sensor en el bus, la mayoría de las

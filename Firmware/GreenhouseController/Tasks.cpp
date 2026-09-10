@@ -281,7 +281,7 @@ void tareaControl(void* parametro) {
                 uint8_t canal = cmd.zona == "atriles" ? Config::RELE_CANAL_ATRILES : Config::RELE_CANAL_DESCANSO;
                 bool exito = g_releClient.escribirCanal(canal, cmd.valorBool);
                 g_cloud.enviarAck(cmd.orderId, exito, exito ? "" : "El módulo de relés no confirmó la orden.");
-            } else if (cmd.pendiente && cmd.tipo != "sht35_asignar_direccion" && cmd.tipo != "sht35_leer_direccion") {
+            } else if (cmd.pendiente && cmd.tipo != "sht35_asignar_direccion" && cmd.tipo != "sht35_leer_direccion" && cmd.tipo != "sht35_calibrar") {
                 g_cloud.enviarAck(cmd.orderId, false, "Tipo de comando no reconocido en esta versión.");
             }
 
@@ -324,6 +324,13 @@ void tareaControl(void* parametro) {
             g_cloud.enviarAckSht35(cmd.orderId, exito,
                                    exito ? "" : "Ningún sensor respondió en las direcciones 1-10 (revisá cableado A+/B+, alimentación y que haya un solo sensor conectado).",
                                    direccionEncontrada, temperaturaC, humedadPct);
+        } else if (cmd.pendiente && cmd.tipo == "sht35_calibrar") {
+            // PERMANENTE (a diferencia de las dos ramas de arriba) — ver Sht35Direccionador::calibrar().
+            float temperaturaC = 0, humedadPct = 0;
+            String error;
+            bool esHumedad = cmd.valorTexto == "humedad";
+            bool exito = g_sht35Direccionador.calibrar(cmd.direccionActual, esHumedad, cmd.valorFloat, temperaturaC, humedadPct, error);
+            g_cloud.enviarAckSht35(cmd.orderId, exito, error, cmd.direccionActual, temperaturaC, humedadPct);
         }
 
         vTaskDelay(pdMS_TO_TICKS(1000));

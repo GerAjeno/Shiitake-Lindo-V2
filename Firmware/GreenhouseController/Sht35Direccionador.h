@@ -4,10 +4,13 @@
  * viven los 4 sensores SHT35-RS485 (modelo LY485 de Liyuan Technology — protocolo y registros
  * confirmados contra el datasheet del fabricante). Protocolo: Modbus RTU función 0x03 (holding
  * registers) para leer, 0x06 para escribir; registro 0x0000 = humedad, 0x0001 = temperatura
- * (int16, /10); Config::SHT35_REGISTRO_DIRECCION (0x0100) = dirección del esclavo.
+ * (int16, /10); Config::SHT35_REGISTRO_DIRECCION (0x0100) = dirección del esclavo; 0x0104/0x0105 =
+ * corrección de fábrica de temperatura/humedad (mismo formato, ver `calibrar()`).
  *
- * `leerSensor()` es PERMANENTE — lo usa `Sht35Sensor` (ver Sht35Sensor.h) para el control real
- * de humedad/temperatura, reemplazando a los DHT22. `asignarDireccion()` y `escanearDireccion()`
+ * `leerSensor()` y `calibrar()` son PERMANENTES — el primero lo usa `Sht35Sensor` (ver
+ * Sht35Sensor.h) para el control real de humedad/temperatura, reemplazando a los DHT22; el segundo
+ * corrige offsets de fábrica detectados sensor por sensor. `asignarDireccion()` y
+ * `escanearDireccion()`
  * en cambio son TEMPORALES — herramienta de puesta en marcha para asignar dirección definitiva
  * (1-4) a cada sensor nuevo, que vienen de fábrica todos en la dirección `1` y sin DIP switches.
  * Quitar esos dos métodos (y su uso en CloudClient/Tasks.cpp + el apartado en settings/page.tsx)
@@ -50,6 +53,15 @@ public:
      */
     bool escanearDireccion(uint8_t direccionMin, uint8_t direccionMax,
                             uint8_t& direccionEncontrada, float& temperaturaC, float& humedadPct);
+
+    /**
+     * PERMANENTE — corrige el offset de fábrica de un sensor puntual. Escribe `correccion` (en las
+     * mismas unidades que la lectura: %RH o °C) en el registro de corrección de humedad (0x0105) o
+     * temperatura (0x0104) — función 0x06, codificado como entero con signo x10 igual que la
+     * propia medición — y relee el sensor para confirmar el valor ya corregido.
+     */
+    bool calibrar(uint8_t direccion, bool esHumedad, float correccion,
+                   float& temperaturaC, float& humedadPct, String& error);
 
 private:
     uint8_t _pinTx, _pinRx;

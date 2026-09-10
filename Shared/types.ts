@@ -149,7 +149,11 @@ export type TipoComandoManual =
   | { tipo: 'sht35_asignar_direccion'; direccionActual: number; nuevaDireccion: number }
   // TEMPORAL: ver arriba — escanea direcciones 1-10 y devuelve la primera que responda, para
   // saber en qué dirección está el único sensor conectado cuando "asignar" falla.
-  | { tipo: 'sht35_leer_direccion' };
+  | { tipo: 'sht35_leer_direccion' }
+  // PERMANENTE (a diferencia de los dos de arriba): corrige el offset de fábrica de un sensor
+  // puntual, escribiendo el registro de corrección de humedad/temperatura del propio SHT35 (ver
+  // Sht35Direccionador::calibrar). `correccion` en las mismas unidades que la lectura (%RH o °C).
+  | { tipo: 'sht35_calibrar'; direccion: number; variable: 'humedad' | 'temperatura'; correccion: number };
 
 export interface ComandoManual {
   orderId: string; // uuid, generado por el backend
