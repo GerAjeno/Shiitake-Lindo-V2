@@ -26,10 +26,11 @@ void Sht35Direccionador::enviarTrama(const uint8_t* trama, size_t longitud) {
     // Respiro de turnaround antes de transmitir: el chip de auto-dirección del adaptador (detecta
     // solo cuándo hablar/escuchar) necesita un momento para soltar el bus después de haber estado
     // recibiendo una respuesta real — sin esto, la trama siguiente sale cortada al principio y
-    // nadie la reconoce. Confirmado en campo: con varios sensores en el bus, siempre fallaba
-    // justo el que quedaba después de uno que SÍ había contestado (nunca el que seguía a un
-    // timeout/silencio, donde el adaptador nunca entró en modo recepción).
-    vTaskDelay(pdMS_TO_TICKS(200)); // DIAGNÓSTICO: subido de 20 a 200ms para confirmar/descartar turnaround como causa
+    // nadie la reconoce. Causa confirmada en campo con los 4 sensores reales: 20ms no alcanzaba
+    // (fallaba siempre el que se consultaba justo después de uno que SÍ había contestado, nunca el
+    // que seguía a un timeout/silencio); con 200ms los 4 sensores responden sin problema. No bajar
+    // este valor sin volver a probar con los 4 sensores reales conectados a la vez.
+    vTaskDelay(pdMS_TO_TICKS(200));
     while (Serial2.available()) Serial2.read(); // limpiar basura pendiente antes de transmitir
     Serial2.write(trama, longitud);
     Serial2.flush();
