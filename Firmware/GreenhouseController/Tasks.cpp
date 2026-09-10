@@ -12,10 +12,11 @@ bool g_falloCriticoAtriles = false, g_falloCriticoDescanso = false;
 String g_loteHistorialPendiente;
 bool g_loteHistorialListo = false;
 
-SensorManager g_sensores;
 RelayModbusClient g_releClient(Config::PIN_RELE_TX, Config::PIN_RELE_RX, Config::RELE_UART_BAUDIOS, Config::RELE_DIRECCION_MODBUS);
-// TEMPORAL, ver Sht35Direccionador.h — quitar junto con el resto del apartado una vez asignadas las 4 direcciones.
+// Bus RS485 compartido por los 4 sensores SHT35 (lectura permanente) y por la herramienta
+// temporal de asignación de direcciones — ver Sht35Direccionador.h.
 Sht35Direccionador g_sht35Direccionador(Config::PIN_SHT35_TX, Config::PIN_SHT35_RX, Config::SHT35_UART_BAUDIOS);
+SensorManager g_sensores(&g_sht35Direccionador);
 HumidifierController g_humidificador(&g_releClient);
 ConfigCache g_configCache;
 CloudClient g_cloud(&g_configCache, &g_config);
@@ -108,11 +109,11 @@ void iniciarTareas() {
     digitalWrite(Config::PIN_LED_ATRILES, LOW);
     digitalWrite(Config::PIN_LED_DESCANSO, LOW);
 
+    g_sht35Direccionador.inicializar(); // bus RS485 de los sensores (y de la herramienta temporal), ver Sht35Direccionador.h
     g_sensores.inicializar();
     g_humidificador.inicializar();
     g_humidificador.establecerNotificador(&g_cloud);
     g_configCache.inicializar();
-    g_sht35Direccionador.inicializar(); // TEMPORAL, ver Sht35Direccionador.h
 
     // RTC: si tiene hora válida, se usa para poner el reloj del sistema de inmediato — así
     // timestampIso() (cada muestra del historial) es correcto desde el arranque, sin esperar a
@@ -179,29 +180,29 @@ void tareaSensores(void* parametro) {
             g_falloCriticoAtriles = at.falloCritico;
             g_falloCriticoDescanso = de.falloCritico;
 
-            notificarTransicionSensor(g_matrizSensores.dht1, "DHT1", "Atriles", &okAnteriorDht1);
-            notificarTransicionSensor(g_matrizSensores.dht2, "DHT2", "Atriles", &okAnteriorDht2);
-            notificarTransicionSensor(g_matrizSensores.dht3, "DHT3", "Descanso", &okAnteriorDht3);
-            notificarTransicionSensor(g_matrizSensores.dht4, "DHT4", "Descanso", &okAnteriorDht4);
+            notificarTransicionSensor(g_matrizSensores.dht1, "SHT35_1", "Atriles", &okAnteriorDht1);
+            notificarTransicionSensor(g_matrizSensores.dht2, "SHT35_2", "Atriles", &okAnteriorDht2);
+            notificarTransicionSensor(g_matrizSensores.dht3, "SHT35_3", "Descanso", &okAnteriorDht3);
+            notificarTransicionSensor(g_matrizSensores.dht4, "SHT35_4", "Descanso", &okAnteriorDht4);
 
             if (!falloCriticoAnteriorAtriles && at.falloCritico) {
                 g_cloud.registrarLog("SENSOR", "CRITICA",
-                    "Fallo crítico: ambos sensores DHT de Atriles sin respuesta. El humidificador se apaga por seguridad.");
+                    "Fallo crítico: ambos sensores SHT35 de Atriles sin respuesta. El humidificador se apaga por seguridad.");
             }
             falloCriticoAnteriorAtriles = at.falloCritico;
             if (!falloCriticoAnteriorDescanso && de.falloCritico) {
                 g_cloud.registrarLog("SENSOR", "CRITICA",
-                    "Fallo crítico: ambos sensores DHT de Descanso sin respuesta. El humidificador se apaga por seguridad.");
+                    "Fallo crítico: ambos sensores SHT35 de Descanso sin respuesta. El humidificador se apaga por seguridad.");
             }
             falloCriticoAnteriorDescanso = de.falloCritico;
 
             if (at.discrepanciaExcesiva) {
                 g_cloud.registrarAlerta("DISCREPANCIA_ATRILES", "ADVERTENCIA",
-                    "DHT1 y DHT2 de Atriles difieren más de lo permitido — revisar sensores.");
+                    "SHT35 #1 y SHT35 #2 de Atriles difieren más de lo permitido — revisar sensores.");
             }
             if (de.discrepanciaExcesiva) {
                 g_cloud.registrarAlerta("DISCREPANCIA_DESCANSO", "ADVERTENCIA",
-                    "DHT3 y DHT4 de Descanso difieren más de lo permitido — revisar sensores.");
+                    "SHT35 #3 y SHT35 #4 de Descanso difieren más de lo permitido — revisar sensores.");
             }
 
             evaluarUmbralAire(g_sensores.lecturaMQAtriles(), g_config.atriles.umbralAdvertenciaMQ,
@@ -425,14 +426,14 @@ void tareaWatchdog(void* parametro) {
                           g_cloud.estaConectado() ? "OK" : "SIN CONEXION", heapLibre,
                           ESP.getPsramSize(), ESP.getFreePsram());
 
-            Serial.printf("[ATRILES]  Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s | DHT1=%s(%.1f%%,%.1fC) DHT2=%s(%.1f%%,%.1fC) MQ1=%d\n",
+            Serial.printf("[ATRILES]  Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s | SHT35_1=%s(%.1f%%,%.1fC) SHT35_2=%s(%.1f%%,%.1fC) MQ1=%d\n",
                           at.humedadPromedio, at.temperaturaPromedio, at.estadoHumidificador ? "ON" : "OFF",
                           modoATexto(at.modoActual), at.falloCriticoDHT ? "SI" : "no",
                           estadoATexto(ms.dht1.estado), ms.dht1.humedad, ms.dht1.temperatura,
                           estadoATexto(ms.dht2.estado), ms.dht2.humedad, ms.dht2.temperatura,
                           ms.mq1.valorCrudo);
 
-            Serial.printf("[DESCANSO] Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s | DHT3=%s(%.1f%%,%.1fC) DHT4=%s(%.1f%%,%.1fC) MQ2=%d\n",
+            Serial.printf("[DESCANSO] Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s | SHT35_3=%s(%.1f%%,%.1fC) SHT35_4=%s(%.1f%%,%.1fC) MQ2=%d\n",
                           de.humedadPromedio, de.temperaturaPromedio, de.estadoHumidificador ? "ON" : "OFF",
                           modoATexto(de.modoActual), de.falloCriticoDHT ? "SI" : "no",
                           estadoATexto(ms.dht3.estado), ms.dht3.humedad, ms.dht3.temperatura,
@@ -444,7 +445,7 @@ void tareaWatchdog(void* parametro) {
 
         // Criterios de salud para confirmar el firmware tras una actualización OTA:
         // 2 minutos de uptime sin reinicio + heap sano + módulo de relés respondiendo + WiFi ok
-        // + backend contactado al menos una vez. Un solo DHT caído NO bloquea la validación.
+        // + backend contactado al menos una vez. Un solo sensor SHT35 caído NO bloquea la validación.
         if (!firmwareValidado && (millis() - inicioMillis) > 120000) {
             bool releOk = g_humidificador.releModuloResponde();
             bool wifiOk = g_wifi.estaConectado();

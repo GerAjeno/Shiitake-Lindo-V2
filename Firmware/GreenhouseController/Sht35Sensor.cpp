@@ -1,22 +1,21 @@
-#include "DhtSensor.h"
+#include "Sht35Sensor.h"
 #include <algorithm>
 
-DhtSensor::DhtSensor(uint8_t pin, const char* nombre)
-    : _dht(pin, DHT22), _nombre(nombre) {}
+Sht35Sensor::Sht35Sensor(Sht35Direccionador* bus, uint8_t direccionModbus, const char* nombre)
+    : _bus(bus), _direccion(direccionModbus), _nombre(nombre) {}
 
-void DhtSensor::inicializar() {
-    _dht.begin();
+void Sht35Sensor::inicializar() {
     _ultimaLectura.estado = EstadoSensor::OFFLINE;
 }
 
-bool DhtSensor::enRangoFisico(float humedad, float temperatura) const {
+bool Sht35Sensor::enRangoFisico(float humedad, float temperatura) const {
     if (isnan(humedad) || isnan(temperatura)) return false;
     if (humedad < 0.0f || humedad > 100.0f) return false;
     if (temperatura < -40.0f || temperatura > 80.0f) return false;
     return true;
 }
 
-float DhtSensor::medianaDe5(const float* valores) const {
+float Sht35Sensor::medianaDe5(const float* valores) const {
     float copia[5];
     uint8_t n = 0;
     for (uint8_t i = 0; i < 5; i++) {
@@ -27,7 +26,7 @@ float DhtSensor::medianaDe5(const float* valores) const {
     return copia[n / 2];
 }
 
-bool DhtSensor::saltoAceptable(float humedad, float temperatura) const {
+bool Sht35Sensor::saltoAceptable(float humedad, float temperatura) const {
     // Con menos de 2 muestras previas no hay suficiente historial para juzgar un "salto": se acepta.
     if (_muestrasValidasAcumuladas < 2) return true;
 
@@ -40,16 +39,16 @@ bool DhtSensor::saltoAceptable(float humedad, float temperatura) const {
     return true;
 }
 
-bool DhtSensor::leer() {
+bool Sht35Sensor::leer() {
     if (!_habilitado) {
         _ultimaLectura.estado = EstadoSensor::OFFLINE;
         return false;
     }
 
-    float humedad = _dht.readHumidity();
-    float temperatura = _dht.readTemperature();
+    float humedad = NAN, temperatura = NAN;
+    bool respondio = _bus->leerSensor(_direccion, temperatura, humedad);
 
-    bool valida = enRangoFisico(humedad, temperatura) && saltoAceptable(humedad, temperatura);
+    bool valida = respondio && enRangoFisico(humedad, temperatura) && saltoAceptable(humedad, temperatura);
 
     if (valida) {
         _historialHumedad[_indiceHistorial] = humedad;
@@ -73,11 +72,11 @@ bool DhtSensor::leer() {
         if (_fallosConsecutivos >= Config::LECTURAS_PARA_DECLARAR_FALLO) {
             // Ya declarado caído oficialmente: no debe quedar un valor numérico viejo asociado
             // a un estado OFFLINE/INVALIDO (confunde a la web/BD, que reciben número + estado juntos).
-            _ultimaLectura.estado = isnan(humedad) || isnan(temperatura) ? EstadoSensor::OFFLINE : EstadoSensor::LECTURA_INVALIDA;
+            _ultimaLectura.estado = respondio ? EstadoSensor::LECTURA_INVALIDA : EstadoSensor::OFFLINE;
             _ultimaLectura.humedad = NAN;
             _ultimaLectura.temperatura = NAN;
         }
-        // Antes de acumular 4 fallos, se conserva el último valor válido conocido (no se interrumpe el control).
+        // Antes de acumular N fallos, se conserva el último valor válido conocido (no se interrumpe el control).
     }
 
     return valida;

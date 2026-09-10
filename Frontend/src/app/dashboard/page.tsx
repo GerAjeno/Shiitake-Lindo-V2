@@ -81,7 +81,7 @@ export default function DashboardPage() {
               subtitulo="Cultivo Principal y Crecimiento de Hongos Shiitake"
               telemetria={actual?.atriles}
               configuracion={configuracion?.atriles}
-              sensoresNombres={["DHT #1", "DHT #2", "MQ-135 #1"]}
+              sensoresNombres={["SHT35 #1", "SHT35 #2", "MQ-135 #1"]}
               co2Deshabilitado={configuracion?.sensoresHabilitados?.mq1 === false}
               colorTema="cyan"
               puedeControlar={puedeControlar}
@@ -92,7 +92,7 @@ export default function DashboardPage() {
               subtitulo="Zona de Reposo, Incubación y Mantenimiento"
               telemetria={actual?.descanso}
               configuracion={configuracion?.descanso}
-              sensoresNombres={["DHT #3", "DHT #4", "MQ-135 #2"]}
+              sensoresNombres={["SHT35 #3", "SHT35 #4", "MQ-135 #2"]}
               co2Deshabilitado={configuracion?.sensoresHabilitados?.mq2 === false}
               colorTema="emerald"
               puedeControlar={puedeControlar}

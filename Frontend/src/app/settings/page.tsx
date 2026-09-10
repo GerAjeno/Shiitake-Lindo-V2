@@ -38,7 +38,7 @@ interface VisualZona {
 const VISUAL_ATRILES: VisualZona = {
   emoji: "🌾",
   titulo: "Área 1: Atriles (Cultivo Principal)",
-  subtitulo: "Sensores asignados: DHT #1, DHT #2, MQ-135 #1",
+  subtitulo: "Sensores asignados: SHT35 #1, SHT35 #2, MQ-135 #1",
   colorTexto: "text-cyan-700 dark:text-cyan-400",
   colorBorde: "border-cyan-500/40",
   colorGradiente: "from-cyan-500/5 via-white to-slate-50 dark:from-cyan-950/20 dark:via-slate-900 dark:to-slate-950",
@@ -51,7 +51,7 @@ const VISUAL_ATRILES: VisualZona = {
 const VISUAL_DESCANSO: VisualZona = {
   emoji: "🌱",
   titulo: "Área 2: Descanso (Zonas de Reposo)",
-  subtitulo: "Sensores asignados: DHT #3, DHT #4, MQ-135 #2",
+  subtitulo: "Sensores asignados: SHT35 #3, SHT35 #4, MQ-135 #2",
   colorTexto: "text-emerald-700 dark:text-emerald-400",
   colorBorde: "border-emerald-500/40",
   colorGradiente: "from-emerald-500/5 via-white to-slate-50 dark:from-emerald-950/20 dark:via-slate-900 dark:to-slate-950",

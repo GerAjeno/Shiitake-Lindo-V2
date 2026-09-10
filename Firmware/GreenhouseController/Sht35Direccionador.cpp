@@ -7,6 +7,7 @@ Sht35Direccionador::Sht35Direccionador(uint8_t pinTx, uint8_t pinRx, uint32_t ba
 
 void Sht35Direccionador::inicializar() {
     Serial2.begin(_baudios, SERIAL_8N1, _pinRx, _pinTx);
+    _mutexBus = xSemaphoreCreateMutex();
 }
 
 uint16_t Sht35Direccionador::crc16Modbus(const uint8_t* datos, size_t longitud) {
@@ -40,6 +41,13 @@ bool Sht35Direccionador::leerRespuesta(uint8_t* buffer, size_t longitudEsperada,
 
 bool Sht35Direccionador::asignarDireccion(uint8_t direccionActual, uint8_t nuevaDireccion,
                                            float& temperaturaC, float& humedadPct, String& error) {
+    // El bus se comparte con la tarea de sensores (lectura continua) — sin este mutex, una lectura
+    // periódica podría interleavearse en medio de esta escritura y corromper ambas tramas.
+    if (xSemaphoreTake(_mutexBus, pdMS_TO_TICKS(2000)) != pdTRUE) {
+        error = "El bus RS485 está ocupado, intentá de nuevo.";
+        return false;
+    }
+
     // Paso 1: escribir el holding register de dirección (función 0x06, escritura de registro único).
     uint8_t escritura[8];
     escritura[0] = direccionActual;
@@ -59,22 +67,32 @@ bool Sht35Direccionador::asignarDireccion(uint8_t direccionActual, uint8_t nueva
     if (!leerRespuesta(respEscritura, sizeof(respEscritura)) || memcmp(escritura, respEscritura, sizeof(escritura)) != 0) {
         error = "El sensor en la dirección " + String(direccionActual) + " no confirmó el cambio de dirección "
                 "(revisá que sea el único sensor conectado al bus ahora mismo).";
+        xSemaphoreGive(_mutexBus);
         return false;
     }
 
     delay(300); // algunos módulos tardan en aplicar la nueva dirección antes de volver a responder
 
     // Paso 2: leer temperatura/humedad en la NUEVA dirección para confirmar que fue el sensor
-    // correcto el que cambió.
-    if (!leerSensor(nuevaDireccion, temperaturaC, humedadPct)) {
+    // correcto el que cambió (versión sin mutex: ya lo tenemos tomado desde arriba).
+    if (!leerSensorSinBloqueo(nuevaDireccion, temperaturaC, humedadPct, 400)) {
         error = "Se asignó la dirección " + String(nuevaDireccion) + ", pero el sensor no respondió a la "
                 "lectura de verificación en esa dirección.";
+        xSemaphoreGive(_mutexBus);
         return false;
     }
+    xSemaphoreGive(_mutexBus);
     return true;
 }
 
 bool Sht35Direccionador::leerSensor(uint8_t direccion, float& temperaturaC, float& humedadPct, uint32_t timeoutMs) {
+    if (xSemaphoreTake(_mutexBus, pdMS_TO_TICKS(2000)) != pdTRUE) return false;
+    bool resultado = leerSensorSinBloqueo(direccion, temperaturaC, humedadPct, timeoutMs);
+    xSemaphoreGive(_mutexBus);
+    return resultado;
+}
+
+bool Sht35Direccionador::leerSensorSinBloqueo(uint8_t direccion, float& temperaturaC, float& humedadPct, uint32_t timeoutMs) {
     // Función 0x03 (holding registers — este módulo NO soporta 0x04, confirmado con el manual del
     // fabricante). Registro 0x0000 = HUMEDAD, 0x0001 = TEMPERATURA (ese orden, no al revés).
     uint8_t lectura[8];

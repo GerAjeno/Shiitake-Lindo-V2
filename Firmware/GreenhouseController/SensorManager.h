@@ -1,14 +1,21 @@
 /**
  * @file SensorManager.h
- * @description Orquesta la lectura de los 4 DHT22 y 2 MQ135, calcula promedios por zona con
- * redundancia dual (si un sensor falla se usa el otro; si ambos fallan se marca falloCriticoDHT),
- * y detecta discrepancias excesivas entre la pareja de sensores de una zona (genera alerta, pero
- * NO descarta automáticamente ninguno de los dos — decisión explícita del usuario).
+ * @description Orquesta la lectura de los 4 sensores de humedad/temperatura y 2 MQ135, calcula
+ * promedios por zona con redundancia dual (si un sensor falla se usa el otro; si ambos fallan se
+ * marca falloCriticoDHT), y detecta discrepancias excesivas entre la pareja de sensores de una
+ * zona (genera alerta, pero NO descarta automáticamente ninguno de los dos — decisión explícita
+ * del usuario).
+ *
+ * Los 4 sensores de humedad/temperatura son SHT35-RS485 (antes DHT22, reemplazados por completo
+ * — ver Sht35Sensor.h). Los nombres de campo (`dht1`..`dht4`, `dhtXHabilitado`, `ResultadoZonaDHT`,
+ * `falloCriticoDHT`) se conservan tal cual en todo el stack (firmware/backend/frontend/DB) para no
+ * arrastrar una migración de esquema sin beneficio funcional — son solo el nombre del "slot" de
+ * cada sensor, no implican protocolo DHT.
  */
 #ifndef SENSORMANAGER_H
 #define SENSORMANAGER_H
 
-#include "DhtSensor.h"
+#include "Sht35Sensor.h"
 #include "Mq135Sensor.h"
 #include "Types.h"
 
@@ -21,7 +28,7 @@ struct ResultadoZonaDHT {
 
 class SensorManager {
 public:
-    SensorManager();
+    SensorManager(Sht35Direccionador* busSht35);
     void inicializar();
     void leerTodos();
     void aplicarSensoresHabilitados(const ConfiguracionSistema& config);
@@ -37,10 +44,10 @@ public:
     MatrizSensores obtenerMatriz() const;
 
 private:
-    DhtSensor _dht1, _dht2, _dht3, _dht4;
+    Sht35Sensor _dht1, _dht2, _dht3, _dht4; // direcciones Modbus 1,2 -> Atriles; 3,4 -> Descanso
     Mq135Sensor _mq1, _mq2;
 
-    ResultadoZonaDHT calcularZona(const DhtSensor& a, const DhtSensor& b) const;
+    ResultadoZonaDHT calcularZona(const Sht35Sensor& a, const Sht35Sensor& b) const;
 };
 
 #endif // SENSORMANAGER_H

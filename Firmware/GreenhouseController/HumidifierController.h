@@ -1,7 +1,7 @@
 /**
  * @file HumidifierController.h
  * @description Control de humedad con histéresis (reescrito desde cero). AUTO/MANUAL/TEMPORIZADO,
- * anti-rebote de 120s configurable, apagado de seguridad si ambos DHT de una zona fallan, y
+ * anti-rebote de 120s configurable, apagado de seguridad si ambos sensores de una zona fallan, y
  * reinicio del anti-rebote al cambiar de modo para permitir conmutación inmediata (<100ms).
  */
 #ifndef HUMIDIFIERCONTROLLER_H

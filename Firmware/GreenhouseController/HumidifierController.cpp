@@ -132,7 +132,7 @@ void HumidifierController::actualizarControl(const ResultadoZonaDHT& atriles, co
             _estadoAtriles = false;
             _ultimoCambioAtrilesMillis = ahora;
             notificarCambio(Config::RELE_CANAL_ATRILES, false, modoEfAt, NAN, NAN, config.atriles.humedadMinima,
-                             config.atriles.humedadMaxima, "Apagado de seguridad: ambos DHT de Atriles sin lectura válida");
+                             config.atriles.humedadMaxima, "Apagado de seguridad: ambos SHT35 de Atriles sin lectura válida");
         }
     } else {
         bool nuevoEstado = _estadoAtriles;
@@ -161,7 +161,7 @@ void HumidifierController::actualizarControl(const ResultadoZonaDHT& atriles, co
             _estadoDescanso = false;
             _ultimoCambioDescansoMillis = ahora;
             notificarCambio(Config::RELE_CANAL_DESCANSO, false, modoEfDe, NAN, NAN, config.descanso.humedadMinima,
-                             config.descanso.humedadMaxima, "Apagado de seguridad: ambos DHT de Descanso sin lectura válida");
+                             config.descanso.humedadMaxima, "Apagado de seguridad: ambos SHT35 de Descanso sin lectura válida");
         }
     } else {
         bool nuevoEstado = _estadoDescanso;

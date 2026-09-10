@@ -2,7 +2,7 @@
 
 /**
  * @file SensorHealthMatrix.tsx
- * @description Matriz de salud individual para cada sensor (DHT #1-4, MQ #1-2). Reconstruida
+ * @description Matriz de salud individual para cada sensor (SHT35 #1-4, MQ #1-2). Reconstruida
  * a partir del sistema anterior — indica claramente cuál sensor específico falló.
  */
 
@@ -24,10 +24,10 @@ export function SensorHealthMatrix({ sensores }: Props) {
   }
 
   const listaSensores = [
-    { id: "Humedad DHT #1", tipo: "Temp / Humedad (Atriles)", estado: sensores.dht1.estado, valor: `${sensores.dht1.humedad}% RH | ${sensores.dht1.temperatura}°C` },
-    { id: "Humedad DHT #2", tipo: "Temp / Humedad (Atriles)", estado: sensores.dht2.estado, valor: `${sensores.dht2.humedad}% RH | ${sensores.dht2.temperatura}°C` },
-    { id: "Humedad DHT #3", tipo: "Temp / Humedad (Descanso)", estado: sensores.dht3.estado, valor: `${sensores.dht3.humedad}% RH | ${sensores.dht3.temperatura}°C` },
-    { id: "Humedad DHT #4", tipo: "Temp / Humedad (Descanso)", estado: sensores.dht4.estado, valor: `${sensores.dht4.humedad}% RH | ${sensores.dht4.temperatura}°C` },
+    { id: "Humedad SHT35 #1", tipo: "Temp / Humedad (Atriles)", estado: sensores.dht1.estado, valor: `${sensores.dht1.humedad}% RH | ${sensores.dht1.temperatura}°C` },
+    { id: "Humedad SHT35 #2", tipo: "Temp / Humedad (Atriles)", estado: sensores.dht2.estado, valor: `${sensores.dht2.humedad}% RH | ${sensores.dht2.temperatura}°C` },
+    { id: "Humedad SHT35 #3", tipo: "Temp / Humedad (Descanso)", estado: sensores.dht3.estado, valor: `${sensores.dht3.humedad}% RH | ${sensores.dht3.temperatura}°C` },
+    { id: "Humedad SHT35 #4", tipo: "Temp / Humedad (Descanso)", estado: sensores.dht4.estado, valor: `${sensores.dht4.humedad}% RH | ${sensores.dht4.temperatura}°C` },
     { id: "Calidad de Aire MQ-135 #1", tipo: "Calidad Aire (Atriles)", estado: sensores.mq1.estado, valor: `Analógico: ${sensores.mq1.valorCrudo} ADC (${sensores.mq1.nivel})` },
     { id: "Calidad de Aire MQ-135 #2", tipo: "Calidad Aire (Descanso)", estado: sensores.mq2.estado, valor: `Analógico: ${sensores.mq2.valorCrudo} ADC (${sensores.mq2.nivel})` },
   ];

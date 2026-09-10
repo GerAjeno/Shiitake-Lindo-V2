@@ -1,9 +1,9 @@
 #include "SensorManager.h"
 #include "Config.h"
 
-SensorManager::SensorManager()
-    : _dht1(Config::PIN_DHT1, "DHT1"), _dht2(Config::PIN_DHT2, "DHT2"),
-      _dht3(Config::PIN_DHT3, "DHT3"), _dht4(Config::PIN_DHT4, "DHT4"),
+SensorManager::SensorManager(Sht35Direccionador* busSht35)
+    : _dht1(busSht35, 1, "SHT35_1"), _dht2(busSht35, 2, "SHT35_2"),
+      _dht3(busSht35, 3, "SHT35_3"), _dht4(busSht35, 4, "SHT35_4"),
       _mq1(Config::PIN_MQ1), _mq2(Config::PIN_MQ2) {}
 
 void SensorManager::inicializar() {
@@ -12,17 +12,14 @@ void SensorManager::inicializar() {
 }
 
 void SensorManager::leerTodos() {
-    // Respiro entre cada lectura DHT (bit-banging de ~5ms con interrupciones deshabilitadas):
-    // leerlos pegados uno tras otro dispara fallos de lectura cruzados entre sensores y puede
-    // gatillar el Interrupt Watchdog (IWDT). Mismo valor que ya estaba probado en el firmware anterior.
+    // A diferencia del DHT22 (bit-banging con interrupciones deshabilitadas, necesitaba ~150ms de
+    // respiro entre lecturas), el SHT35 se lee por Modbus RTU sobre UART de hardware — cada
+    // transacción ya se serializa sola vía el mutex del bus (ver Sht35Direccionador), sin necesidad
+    // de delays artificiales entre sensores.
     _dht1.leer();
-    vTaskDelay(pdMS_TO_TICKS(150));
     _dht2.leer();
-    vTaskDelay(pdMS_TO_TICKS(150));
     _dht3.leer();
-    vTaskDelay(pdMS_TO_TICKS(150));
     _dht4.leer();
-    vTaskDelay(pdMS_TO_TICKS(150));
     _mq1.leer();
     vTaskDelay(pdMS_TO_TICKS(50));
     _mq2.leer();
@@ -37,7 +34,7 @@ void SensorManager::aplicarSensoresHabilitados(const ConfiguracionSistema& confi
     _mq2.establecerHabilitado(config.mq2Habilitado);
 }
 
-ResultadoZonaDHT SensorManager::calcularZona(const DhtSensor& a, const DhtSensor& b) const {
+ResultadoZonaDHT SensorManager::calcularZona(const Sht35Sensor& a, const Sht35Sensor& b) const {
     ResultadoZonaDHT resultado;
     LecturaDHT la = a.obtenerLectura();
     LecturaDHT lb = b.obtenerLectura();
