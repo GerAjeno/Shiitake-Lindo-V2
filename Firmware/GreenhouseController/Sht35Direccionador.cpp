@@ -23,6 +23,13 @@ uint16_t Sht35Direccionador::crc16Modbus(const uint8_t* datos, size_t longitud) 
 }
 
 void Sht35Direccionador::enviarTrama(const uint8_t* trama, size_t longitud) {
+    // Respiro de turnaround antes de transmitir: el chip de auto-dirección del adaptador (detecta
+    // solo cuándo hablar/escuchar) necesita un momento para soltar el bus después de haber estado
+    // recibiendo una respuesta real — sin esto, la trama siguiente sale cortada al principio y
+    // nadie la reconoce. Confirmado en campo: con varios sensores en el bus, siempre fallaba
+    // justo el que quedaba después de uno que SÍ había contestado (nunca el que seguía a un
+    // timeout/silencio, donde el adaptador nunca entró en modo recepción).
+    vTaskDelay(pdMS_TO_TICKS(20));
     while (Serial2.available()) Serial2.read(); // limpiar basura pendiente antes de transmitir
     Serial2.write(trama, longitud);
     Serial2.flush();
