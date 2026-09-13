@@ -19,6 +19,7 @@ import { apiFetch } from "@/lib/api";
 import { FirmwareManager } from "@/components/scada/FirmwareManager";
 import { Sht35DireccionadorTemporal } from "@/components/settings/Sht35DireccionadorTemporal";
 import { Sht35CalibracionSensores } from "@/components/settings/Sht35CalibracionSensores";
+import { SensoresHabilitadosPanel } from "@/components/settings/SensoresHabilitadosPanel";
 import { TemporizadorConfig } from "@/components/settings/TemporizadorConfig";
 import { Switch } from "@/components/ui/Switch";
 import type { ConfiguracionZona, RangoHorario } from "@shared/types";
@@ -616,6 +617,7 @@ export default function SettingsPage() {
           {rol === "admin" && <FirmwareManager actual={actual} />}
           {rol === "admin" && <Sht35DireccionadorTemporal enviarComando={enviarComando} />}
           {rol === "admin" && <Sht35CalibracionSensores enviarComando={enviarComando} />}
+          {rol === "admin" && <SensoresHabilitadosPanel configuracion={configuracion} />}
 
           {!localAtriles || !localDescanso ? (
             <p className="text-sm text-slate-500 font-mono">Cargando configuración...</p>
