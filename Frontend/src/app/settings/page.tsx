@@ -617,7 +617,7 @@ export default function SettingsPage() {
           {rol === "admin" && <FirmwareManager actual={actual} />}
           {rol === "admin" && <Sht35DireccionadorTemporal enviarComando={enviarComando} />}
           {rol === "admin" && <Sht35CalibracionSensores enviarComando={enviarComando} />}
-          {rol === "admin" && <AsignacionSensoresPanel configuracion={configuracion} />}
+          {(rol === "admin" || rol === "operador") && <AsignacionSensoresPanel configuracion={configuracion} />}
 
           {!localAtriles || !localDescanso ? (
             <p className="text-sm text-slate-500 font-mono">Cargando configuración...</p>
