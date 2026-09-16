@@ -27,7 +27,7 @@ graph TD
 
     subgraph "Invernadero — ESP32-S3"
         CTRL[Controlador Central]
-        DHT[SHT35-RS485 x4 — Atriles y Descanso]
+        DHT[Pool de 6: DHT22 x2 + SHT35-RS485 x4 — asignación a zona configurable]
         MQ[MQ135 x2 — Calidad de aire]
         RELE[Módulo de relés Modbus RTU/UART]
     end

@@ -47,6 +47,19 @@ void deserializarZona(JsonObjectConst obj, ConfiguracionZona& zona) {
     }
 }
 
+void serializarAsignacion(JsonArray arr, const AsignacionZona& asignacion) {
+    for (uint8_t i = 0; i < asignacion.cantidad; i++) arr.add(asignacion.sensores[i]);
+}
+
+void deserializarAsignacion(JsonArrayConst arr, AsignacionZona& asignacion) {
+    if (arr.isNull()) return; // sin dato guardado -> conservar el default de fábrica del struct
+    asignacion.cantidad = 0;
+    for (JsonVariantConst v : arr) {
+        if (asignacion.cantidad >= MAX_SENSORES_POR_ZONA) break;
+        asignacion.sensores[asignacion.cantidad++] = v.as<String>();
+    }
+}
+
 } // namespace
 
 void ConfigCache::inicializar() {
@@ -58,8 +71,8 @@ void ConfigCache::guardarConfiguracion(const ConfiguracionSistema& config) {
     serializarZona(doc["atriles"].to<JsonObject>(), config.atriles);
     serializarZona(doc["descanso"].to<JsonObject>(), config.descanso);
     doc["intervaloConmutacionMinimoSeg"] = config.intervaloConmutacionMinimoSeg;
-    doc["dht1"] = config.dht1Habilitado; doc["dht2"] = config.dht2Habilitado;
-    doc["dht3"] = config.dht3Habilitado; doc["dht4"] = config.dht4Habilitado;
+    serializarAsignacion(doc["asignacionAtriles"].to<JsonArray>(), config.asignacionAtriles);
+    serializarAsignacion(doc["asignacionDescanso"].to<JsonArray>(), config.asignacionDescanso);
     doc["mq1"] = config.mq1Habilitado; doc["mq2"] = config.mq2Habilitado;
 
     String salida;
@@ -81,8 +94,8 @@ bool ConfigCache::cargarConfiguracion(ConfiguracionSistema& config) {
     deserializarZona(doc["atriles"], config.atriles);
     deserializarZona(doc["descanso"], config.descanso);
     config.intervaloConmutacionMinimoSeg = doc["intervaloConmutacionMinimoSeg"] | config.intervaloConmutacionMinimoSeg;
-    config.dht1Habilitado = doc["dht1"] | true; config.dht2Habilitado = doc["dht2"] | true;
-    config.dht3Habilitado = doc["dht3"] | true; config.dht4Habilitado = doc["dht4"] | true;
+    deserializarAsignacion(doc["asignacionAtriles"], config.asignacionAtriles);
+    deserializarAsignacion(doc["asignacionDescanso"], config.asignacionDescanso);
     config.mq1Habilitado = doc["mq1"] | true; config.mq2Habilitado = doc["mq2"] | true;
     return true;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validarConfiguracionZona, validarConfiguracionSistema } from './config';
+import { validarConfiguracionZona, validarConfiguracionSistema, validarAsignacionSensores } from './config';
 import type { ConfiguracionZona } from '../shared/types';
 
 const zonaValida: ConfiguracionZona = {
@@ -72,14 +72,36 @@ describe('validarConfiguracionSistema', () => {
   });
 
   it('rechaza sensoresHabilitados con clave desconocida', () => {
-    expect(validarConfiguracionSistema(undefined, { dht1: true, sensorFantasma: false })).toMatch(/desconocida/i);
+    expect(validarConfiguracionSistema(undefined, { mq1: true, sensorFantasma: false })).toMatch(/desconocida/i);
   });
 
   it('rechaza sensoresHabilitados con valores no booleanos', () => {
-    expect(validarConfiguracionSistema(undefined, { dht1: 'si' as any })).toMatch(/booleano/i);
+    expect(validarConfiguracionSistema(undefined, { mq1: 'si' as any })).toMatch(/booleano/i);
   });
 
   it('acepta sensoresHabilitados válido', () => {
-    expect(validarConfiguracionSistema(undefined, { dht1: true, mq1: false })).toBeNull();
+    expect(validarConfiguracionSistema(undefined, { mq1: true, mq2: false })).toBeNull();
+  });
+});
+
+describe('validarAsignacionSensores', () => {
+  it('acepta undefined (actualización parcial sin tocar este campo)', () => {
+    expect(validarAsignacionSensores(undefined)).toBeNull();
+  });
+
+  it('acepta una asignación válida', () => {
+    expect(validarAsignacionSensores({ atriles: ['DHT1', 'SHT4'], descanso: ['SHT2', 'SHT1'] })).toBeNull();
+  });
+
+  it('rechaza un id de sensor inválido', () => {
+    expect(validarAsignacionSensores({ atriles: ['SHT5'], descanso: [] })).toMatch(/id inválido/i);
+  });
+
+  it('rechaza el mismo sensor asignado a las dos zonas', () => {
+    expect(validarAsignacionSensores({ atriles: ['SHT1'], descanso: ['SHT1'] })).toMatch(/las dos zonas/i);
+  });
+
+  it('acepta que una zona quede sin sensores asignados', () => {
+    expect(validarAsignacionSensores({ atriles: [], descanso: ['SHT3', 'SHT4'] })).toBeNull();
   });
 });

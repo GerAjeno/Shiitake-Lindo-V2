@@ -12,11 +12,12 @@ ninguna clase del firmware anterior.
 
 ## Librerías a instalar (Arduino Library Manager)
 
+- `DHT sensor library` (Adafruit) + `Adafruit Unified Sensor` (dependencia) — reincorporada: 2 sensores DHT22 (GPIO 4/5) conviven con los 4 SHT35-RS485 (ver Types.h/MatrizSensores, pool de 6 sensores con asignación de zona configurable desde la web)
 - `ArduinoJson` (v7.x)
 - `WebSockets` (Links2004 / arduinoWebSockets) — usado por `CloudClient`
 - `Crypto` (rweather) — provee `Ed25519.h`, usado por `OtaManager` para verificar la firma del firmware
 
-El resto (`WiFi`, `HTTPClient`, `WiFiClientSecure`, `Preferences`, `Wire`, `mbedtls/*`, `esp_ota_ops.h`) viene incluido en el core `esp32` de Arduino. Los sensores de humedad/temperatura (SHT35-RS485) y el módulo de relés se leen por Modbus RTU implementado a mano sobre `Serial1`/`Serial2` — no hace falta ninguna librería Modbus externa.
+El resto (`WiFi`, `HTTPClient`, `WiFiClientSecure`, `Preferences`, `Wire`, `mbedtls/*`, `esp_ota_ops.h`) viene incluido en el core `esp32` de Arduino. Los sensores SHT35 y el módulo de relés se leen por Modbus RTU implementado a mano sobre `Serial1`/`Serial2` — no hace falta ninguna librería Modbus externa.
 
 ## Antes de compilar
 

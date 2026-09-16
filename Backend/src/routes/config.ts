@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 import { requireRole } from '../auth/middleware';
 import { enviarConfiguracionADispositivo, difundirANavegadores } from '../ws/hub';
 import type { ConfiguracionSistema, ConfiguracionZona, NombreZona } from '../shared/types';
+import { IDS_SENSOR_TEMP_HUM } from '../shared/types';
 
 export const configRouter = Router();
 
@@ -72,6 +73,7 @@ export async function obtenerConfiguracionCompleta(): Promise<ConfiguracionSiste
     descanso: filaAZona(descanso),
     intervaloConmutacionMinimoSeg: sistema[0].intervalo_conmutacion_min_seg,
     sensoresHabilitados: sistema[0].sensores_habilitados,
+    asignacionSensores: sistema[0].asignacion_sensores,
   };
 }
 
@@ -132,7 +134,7 @@ configRouter.put('/:zona', requireRole('admin', 'operador'), async (req, res) =>
   res.json(configuracionCompleta);
 });
 
-const CLAVES_SENSORES = ['dht1', 'dht2', 'dht3', 'dht4', 'mq1', 'mq2'] as const;
+const CLAVES_SENSORES = ['mq1', 'mq2'] as const;
 
 /**
  * A diferencia de PUT /:zona, este endpoint no validaba nada ni dejaba rastro en sistema_logs —
@@ -168,10 +170,41 @@ export function validarConfiguracionSistema(intervaloConmutacionMinimoSeg: unkno
   return null;
 }
 
-configRouter.put('/', requireRole('admin', 'operador'), async (req, res) => {
-  const { intervaloConmutacionMinimoSeg, sensoresHabilitados } = req.body as Partial<ConfiguracionSistema>;
+/**
+ * Qué sensores del pool de 6 (ver IdSensorTempHum) alimentan cada zona — reemplaza el mapeo fijo
+ * que existía cuando los 4 sensores de humedad/temperatura eran todos SHT35. Un mismo sensor no
+ * puede estar asignado a las dos zonas a la vez (dejaría de tener sentido "redundancia por zona").
+ */
+export function validarAsignacionSensores(asignacionSensores: unknown): string | null {
+  if (asignacionSensores === undefined) return null;
+  if (typeof asignacionSensores !== 'object' || asignacionSensores === null) {
+    return 'asignacionSensores debe ser un objeto.';
+  }
+  const obj = asignacionSensores as Record<string, unknown>;
+  const vistos = new Set<string>();
+  for (const zonaClave of ['atriles', 'descanso'] as const) {
+    const lista = obj[zonaClave];
+    if (lista === undefined) continue;
+    if (!Array.isArray(lista)) return `asignacionSensores.${zonaClave} debe ser un arreglo.`;
+    for (const id of lista) {
+      if (!(IDS_SENSOR_TEMP_HUM as readonly string[]).includes(id as string)) {
+        return `asignacionSensores.${zonaClave} tiene un id inválido: "${id}". Debe ser uno de ${IDS_SENSOR_TEMP_HUM.join(', ')}.`;
+      }
+      if (vistos.has(id as string)) {
+        return `El sensor "${id}" está asignado a las dos zonas a la vez — cada sensor solo puede estar en una.`;
+      }
+      vistos.add(id as string);
+    }
+  }
+  return null;
+}
 
-  const errorValidacion = validarConfiguracionSistema(intervaloConmutacionMinimoSeg, sensoresHabilitados);
+configRouter.put('/', requireRole('admin', 'operador'), async (req, res) => {
+  const { intervaloConmutacionMinimoSeg, sensoresHabilitados, asignacionSensores } = req.body as Partial<ConfiguracionSistema>;
+
+  const errorValidacion =
+    validarConfiguracionSistema(intervaloConmutacionMinimoSeg, sensoresHabilitados) ??
+    validarAsignacionSensores(asignacionSensores);
   if (errorValidacion) return res.status(400).json({ error: errorValidacion });
 
   const { rows: previas } = await pool.query('SELECT * FROM configuracion_sistema WHERE id = true');
@@ -181,9 +214,14 @@ configRouter.put('/', requireRole('admin', 'operador'), async (req, res) => {
     `UPDATE configuracion_sistema SET
        intervalo_conmutacion_min_seg = COALESCE($1, intervalo_conmutacion_min_seg),
        sensores_habilitados = COALESCE($2, sensores_habilitados),
+       asignacion_sensores = COALESCE($3, asignacion_sensores),
        actualizado_en = now()
      WHERE id = true`,
-    [intervaloConmutacionMinimoSeg ?? null, sensoresHabilitados ? JSON.stringify(sensoresHabilitados) : null]
+    [
+      intervaloConmutacionMinimoSeg ?? null,
+      sensoresHabilitados ? JSON.stringify(sensoresHabilitados) : null,
+      asignacionSensores ? JSON.stringify(asignacionSensores) : null,
+    ]
   );
 
   await pool.query(
@@ -196,8 +234,9 @@ configRouter.put('/', requireRole('admin', 'operador'), async (req, res) => {
       JSON.stringify({
         intervaloConmutacionMinimoSeg: anterior?.intervalo_conmutacion_min_seg,
         sensoresHabilitados: anterior?.sensores_habilitados,
+        asignacionSensores: anterior?.asignacion_sensores,
       }),
-      JSON.stringify({ intervaloConmutacionMinimoSeg, sensoresHabilitados }),
+      JSON.stringify({ intervaloConmutacionMinimoSeg, sensoresHabilitados, asignacionSensores }),
     ]
   );
 

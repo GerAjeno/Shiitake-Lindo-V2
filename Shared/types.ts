@@ -40,11 +40,20 @@ export interface LecturaMQ {
   nivel: NivelCalidadAire;
 }
 
+// Pool de hasta 6 sensores de humedad/temperatura físicos: 2 DHT22 (GPIO 4/5, reincorporados
+// porque los SHT35 de Descanso dieron problemas) + 4 SHT35-RS485 (direcciones Modbus 1-4). Cuál
+// va a cada zona (Atriles/Descanso) es config libre del usuario — ver
+// ConfiguracionSistema.asignacionSensores — no una relación fija de fábrica.
+export type IdSensorTempHum = 'DHT1' | 'DHT2' | 'SHT1' | 'SHT2' | 'SHT3' | 'SHT4';
+export const IDS_SENSOR_TEMP_HUM: readonly IdSensorTempHum[] = ['DHT1', 'DHT2', 'SHT1', 'SHT2', 'SHT3', 'SHT4'];
+
 export interface MatrizSensores {
-  dht1: LecturaDHT;
-  dht2: LecturaDHT;
-  dht3: LecturaDHT;
-  dht4: LecturaDHT;
+  dht1: LecturaDHT; // GPIO 4
+  dht2: LecturaDHT; // GPIO 5
+  sht1: LecturaDHT; // dirección Modbus 1
+  sht2: LecturaDHT; // dirección Modbus 2
+  sht3: LecturaDHT; // dirección Modbus 3
+  sht4: LecturaDHT; // dirección Modbus 4
   mq1: LecturaMQ;
   mq2: LecturaMQ;
 }
@@ -64,8 +73,14 @@ export interface ConfiguracionSistema {
   atriles: ConfiguracionZona;
   descanso: ConfiguracionZona;
   intervaloConmutacionMinimoSeg: number;
+  // Qué sensores del pool de 6 (ver IdSensorTempHum) alimentan cada zona — reemplaza el mapeo fijo
+  // que existía antes (dht1/dht2->atriles, dht3/dht4->descanso). Típicamente 2 IDs por zona, pero
+  // el código tolera 0, 1 o más — no hay una cantidad "correcta" impuesta por el tipo.
+  asignacionSensores: {
+    atriles: IdSensorTempHum[];
+    descanso: IdSensorTempHum[];
+  };
   sensoresHabilitados: {
-    dht1: boolean; dht2: boolean; dht3: boolean; dht4: boolean;
     mq1: boolean; mq2: boolean;
   };
 }

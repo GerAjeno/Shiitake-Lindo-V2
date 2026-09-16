@@ -146,12 +146,13 @@ void CloudClient::procesarMensajeEntrante(const String& json) {
         }
         JsonObjectConst sensHab = datos["sensoresHabilitados"];
         if (!sensHab.isNull()) {
-            _configSistemaRef->dht1Habilitado = sensHab["dht1"] | true;
-            _configSistemaRef->dht2Habilitado = sensHab["dht2"] | true;
-            _configSistemaRef->dht3Habilitado = sensHab["dht3"] | true;
-            _configSistemaRef->dht4Habilitado = sensHab["dht4"] | true;
             _configSistemaRef->mq1Habilitado = sensHab["mq1"] | true;
             _configSistemaRef->mq2Habilitado = sensHab["mq2"] | true;
+        }
+        JsonObjectConst asignacion = datos["asignacionSensores"];
+        if (!asignacion.isNull()) {
+            parsearAsignacionZona(asignacion["atriles"], _configSistemaRef->asignacionAtriles);
+            parsearAsignacionZona(asignacion["descanso"], _configSistemaRef->asignacionDescanso);
         }
         // El servidor SIEMPRE gana (sin comparar versiones, decisión explícita del usuario).
         // Persistimos de inmediato para que sobreviva un corte de energía.
@@ -188,6 +189,15 @@ void CloudClient::procesarMensajeEntrante(const String& json) {
     }
 
     xSemaphoreGive(g_mutexEstado);
+}
+
+void CloudClient::parsearAsignacionZona(JsonArrayConst arr, AsignacionZona& destino) {
+    if (arr.isNull()) return; // campo ausente en el mensaje -> no tocar lo que ya había
+    destino.cantidad = 0;
+    for (JsonVariantConst v : arr) {
+        if (destino.cantidad >= MAX_SENSORES_POR_ZONA) break;
+        destino.sensores[destino.cantidad++] = v.as<String>();
+    }
 }
 
 void CloudClient::enviarJson(const JsonDocument& doc) {
@@ -235,7 +245,8 @@ void CloudClient::enviarSensores(const MatrizSensores& m) {
         o["estado"] = aTexto(l.estado); o["valorCrudo"] = l.valorCrudo; o["nivel"] = aTexto(l.nivel);
     };
     volcarDht(d["dht1"].to<JsonObject>(), m.dht1); volcarDht(d["dht2"].to<JsonObject>(), m.dht2);
-    volcarDht(d["dht3"].to<JsonObject>(), m.dht3); volcarDht(d["dht4"].to<JsonObject>(), m.dht4);
+    volcarDht(d["sht1"].to<JsonObject>(), m.sht1); volcarDht(d["sht2"].to<JsonObject>(), m.sht2);
+    volcarDht(d["sht3"].to<JsonObject>(), m.sht3); volcarDht(d["sht4"].to<JsonObject>(), m.sht4);
     volcarMq(d["mq1"].to<JsonObject>(), m.mq1); volcarMq(d["mq2"].to<JsonObject>(), m.mq2);
     enviarJson(doc);
 }

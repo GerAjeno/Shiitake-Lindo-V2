@@ -33,15 +33,20 @@ static const char* estadoATexto(EstadoSensor e) {
     }
 }
 
-/** Detecta transición OK<->caído de un sensor individual y lo registra en la auditoría (SENSOR). */
-static void notificarTransicionSensor(const LecturaDHT& lectura, const char* nombre, const char* zona, bool* anteriorOk) {
+/**
+ * Detecta transición OK<->caído de un sensor individual y lo registra en la auditoría (SENSOR).
+ * Ya no recibe la zona: con la asignación de sensores configurable, un sensor puede no estar
+ * asignado a ninguna zona (entonces esto no se llega a llamar, queda deshabilitado) o estarlo a
+ * cualquiera de las dos — su identidad (DHT1, SHT3, etc.) ya lo distingue sin ambigüedad.
+ */
+static void notificarTransicionSensor(const LecturaDHT& lectura, const char* nombre, bool* anteriorOk) {
     bool okAhora = lectura.estado == EstadoSensor::OK;
     if (*anteriorOk && !okAhora) {
         g_cloud.registrarLog("SENSOR", "ADVERTENCIA",
-            String("Sensor ") + nombre + " (" + zona + ") sin respuesta o lectura inválida tras " +
-            String(Config::LECTURAS_PARA_DECLARAR_FALLO) + " lecturas consecutivas. Se sigue operando con el sensor restante del área.");
+            String("Sensor ") + nombre + " sin respuesta o lectura inválida tras " +
+            String(Config::LECTURAS_PARA_DECLARAR_FALLO) + " lecturas consecutivas.");
     } else if (!*anteriorOk && okAhora) {
-        g_cloud.registrarLog("SENSOR", "INFO", String("Sensor ") + nombre + " (" + zona + ") recuperado, vuelve a reportar lecturas válidas.");
+        g_cloud.registrarLog("SENSOR", "INFO", String("Sensor ") + nombre + " recuperado, vuelve a reportar lecturas válidas.");
     }
     *anteriorOk = okAhora;
 }
@@ -143,7 +148,7 @@ void iniciarTareas() {
     }
 
     g_sensores.leerTodos();
-    g_sensores.aplicarSensoresHabilitados(g_config);
+    g_sensores.aplicarConfiguracion(g_config);
     ResultadoZonaDHT at = g_sensores.calcularAtriles();
     ResultadoZonaDHT de = g_sensores.calcularDescanso();
     g_humidificador.evaluarEstadoInicial(at, de, g_config);
@@ -164,7 +169,8 @@ void tareaSensores(void* parametro) {
 
     // Estado previo de cada sensor/zona, para detectar transiciones y auditar solo el cambio
     // (no cada lectura) — ver notificarTransicionSensor().
-    bool okAnteriorDht1 = true, okAnteriorDht2 = true, okAnteriorDht3 = true, okAnteriorDht4 = true;
+    bool okAnteriorDht1 = true, okAnteriorDht2 = true;
+    bool okAnteriorSht1 = true, okAnteriorSht2 = true, okAnteriorSht3 = true, okAnteriorSht4 = true;
     bool falloCriticoAnteriorAtriles = false, falloCriticoAnteriorDescanso = false;
     bool superabaAdvertenciaAireAtriles = false, superabaAlarmaAireAtriles = false;
     bool superabaAdvertenciaAireDescanso = false, superabaAlarmaAireDescanso = false;
@@ -173,36 +179,38 @@ void tareaSensores(void* parametro) {
         g_sensores.leerTodos();
 
         if (xSemaphoreTake(g_mutexEstado, pdMS_TO_TICKS(200)) == pdTRUE) {
-            g_sensores.aplicarSensoresHabilitados(g_config);
+            g_sensores.aplicarConfiguracion(g_config);
             g_matrizSensores = g_sensores.obtenerMatriz();
             ResultadoZonaDHT at = g_sensores.calcularAtriles();
             ResultadoZonaDHT de = g_sensores.calcularDescanso();
             g_falloCriticoAtriles = at.falloCritico;
             g_falloCriticoDescanso = de.falloCritico;
 
-            notificarTransicionSensor(g_matrizSensores.dht1, "SHT35_1", "Atriles", &okAnteriorDht1);
-            notificarTransicionSensor(g_matrizSensores.dht2, "SHT35_2", "Atriles", &okAnteriorDht2);
-            notificarTransicionSensor(g_matrizSensores.dht3, "SHT35_3", "Descanso", &okAnteriorDht3);
-            notificarTransicionSensor(g_matrizSensores.dht4, "SHT35_4", "Descanso", &okAnteriorDht4);
+            notificarTransicionSensor(g_matrizSensores.dht1, "DHT1", &okAnteriorDht1);
+            notificarTransicionSensor(g_matrizSensores.dht2, "DHT2", &okAnteriorDht2);
+            notificarTransicionSensor(g_matrizSensores.sht1, "SHT1", &okAnteriorSht1);
+            notificarTransicionSensor(g_matrizSensores.sht2, "SHT2", &okAnteriorSht2);
+            notificarTransicionSensor(g_matrizSensores.sht3, "SHT3", &okAnteriorSht3);
+            notificarTransicionSensor(g_matrizSensores.sht4, "SHT4", &okAnteriorSht4);
 
             if (!falloCriticoAnteriorAtriles && at.falloCritico) {
                 g_cloud.registrarLog("SENSOR", "CRITICA",
-                    "Fallo crítico: ambos sensores SHT35 de Atriles sin respuesta. El humidificador se apaga por seguridad.");
+                    "Fallo crítico: ningún sensor asignado a Atriles responde. El humidificador se apaga por seguridad.");
             }
             falloCriticoAnteriorAtriles = at.falloCritico;
             if (!falloCriticoAnteriorDescanso && de.falloCritico) {
                 g_cloud.registrarLog("SENSOR", "CRITICA",
-                    "Fallo crítico: ambos sensores SHT35 de Descanso sin respuesta. El humidificador se apaga por seguridad.");
+                    "Fallo crítico: ningún sensor asignado a Descanso responde. El humidificador se apaga por seguridad.");
             }
             falloCriticoAnteriorDescanso = de.falloCritico;
 
             if (at.discrepanciaExcesiva) {
                 g_cloud.registrarAlerta("DISCREPANCIA_ATRILES", "ADVERTENCIA",
-                    "SHT35 #1 y SHT35 #2 de Atriles difieren más de lo permitido — revisar sensores.");
+                    "Los sensores de Atriles difieren más de lo permitido — revisar sensores.");
             }
             if (de.discrepanciaExcesiva) {
                 g_cloud.registrarAlerta("DISCREPANCIA_DESCANSO", "ADVERTENCIA",
-                    "SHT35 #3 y SHT35 #4 de Descanso difieren más de lo permitido — revisar sensores.");
+                    "Los sensores de Descanso difieren más de lo permitido — revisar sensores.");
             }
 
             evaluarUmbralAire(g_sensores.lecturaMQAtriles(), g_config.atriles.umbralAdvertenciaMQ,
@@ -449,19 +457,23 @@ void tareaWatchdog(void* parametro) {
                           g_cloud.estaConectado() ? "OK" : "SIN CONEXION", heapLibre,
                           ESP.getPsramSize(), ESP.getFreePsram());
 
-            Serial.printf("[ATRILES]  Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s | SHT35_1=%s(%.1f%%,%.1fC) SHT35_2=%s(%.1f%%,%.1fC) MQ1=%d\n",
+            // Ya no se puede asumir qué par de sensores alimenta cada zona (es config, no fijo) —
+            // se imprime el promedio ya calculado por zona, y aparte el estado crudo de los 6.
+            Serial.printf("[ATRILES]  Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s MQ1=%d\n",
                           at.humedadPromedio, at.temperaturaPromedio, at.estadoHumidificador ? "ON" : "OFF",
-                          modoATexto(at.modoActual), at.falloCriticoDHT ? "SI" : "no",
+                          modoATexto(at.modoActual), at.falloCriticoDHT ? "SI" : "no", ms.mq1.valorCrudo);
+
+            Serial.printf("[DESCANSO] Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s MQ2=%d\n",
+                          de.humedadPromedio, de.temperaturaPromedio, de.estadoHumidificador ? "ON" : "OFF",
+                          modoATexto(de.modoActual), de.falloCriticoDHT ? "SI" : "no", ms.mq2.valorCrudo);
+
+            Serial.printf("[SENSORES] DHT1=%s(%.1f%%,%.1fC) DHT2=%s(%.1f%%,%.1fC) SHT1=%s(%.1f%%,%.1fC) SHT2=%s(%.1f%%,%.1fC) SHT3=%s(%.1f%%,%.1fC) SHT4=%s(%.1f%%,%.1fC)\n",
                           estadoATexto(ms.dht1.estado), ms.dht1.humedad, ms.dht1.temperatura,
                           estadoATexto(ms.dht2.estado), ms.dht2.humedad, ms.dht2.temperatura,
-                          ms.mq1.valorCrudo);
-
-            Serial.printf("[DESCANSO] Hum=%.1f%% Temp=%.1fC Rele=%s Modo=%s Fallo=%s | SHT35_3=%s(%.1f%%,%.1fC) SHT35_4=%s(%.1f%%,%.1fC) MQ2=%d\n",
-                          de.humedadPromedio, de.temperaturaPromedio, de.estadoHumidificador ? "ON" : "OFF",
-                          modoATexto(de.modoActual), de.falloCriticoDHT ? "SI" : "no",
-                          estadoATexto(ms.dht3.estado), ms.dht3.humedad, ms.dht3.temperatura,
-                          estadoATexto(ms.dht4.estado), ms.dht4.humedad, ms.dht4.temperatura,
-                          ms.mq2.valorCrudo);
+                          estadoATexto(ms.sht1.estado), ms.sht1.humedad, ms.sht1.temperatura,
+                          estadoATexto(ms.sht2.estado), ms.sht2.humedad, ms.sht2.temperatura,
+                          estadoATexto(ms.sht3.estado), ms.sht3.humedad, ms.sht3.temperatura,
+                          estadoATexto(ms.sht4.estado), ms.sht4.humedad, ms.sht4.temperatura);
             Serial.println("--------------------------------------------------------------------");
             xSemaphoreGive(g_mutexEstado);
         }

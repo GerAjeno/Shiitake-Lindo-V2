@@ -58,8 +58,13 @@ struct LecturaMQ {
     NivelCalidadAire nivel = NivelCalidadAire::BAJO;
 };
 
+// Pool de hasta 6 sensores de humedad/temperatura: 2 DHT22 físicos (GPIO 4/5, reincorporados
+// porque los SHT35 de Descanso dieron problemas) + 4 SHT35-RS485 (direcciones Modbus 1-4). Qué
+// sensor va a cada zona es config libre del usuario (ver ConfiguracionSistema::asignacionAtriles
+// /asignacionDescanso), no una relación fija.
 struct MatrizSensores {
-    LecturaDHT dht1, dht2, dht3, dht4;
+    LecturaDHT dht1, dht2; // GPIO 4, GPIO 5
+    LecturaDHT sht1, sht2, sht3, sht4; // direcciones Modbus 1-4
     LecturaMQ mq1, mq2;
 };
 
@@ -89,11 +94,21 @@ struct ConfiguracionZona {
     int umbralAlarmaMQ = 2800;
 };
 
+// Tope de sensores que se le pueden asignar a una zona — típicamente 2, pero no forzado por el
+// tipo (el usuario elige libremente desde la web cuáles del pool de 6 van en cada zona).
+constexpr uint8_t MAX_SENSORES_POR_ZONA = 4;
+
+struct AsignacionZona {
+    String sensores[MAX_SENSORES_POR_ZONA]; // ids: "DHT1","DHT2","SHT1".."SHT4"
+    uint8_t cantidad = 0;
+};
+
 struct ConfiguracionSistema {
     ConfiguracionZona atriles;
     ConfiguracionZona descanso;
     uint32_t intervaloConmutacionMinimoSeg = 120;
-    bool dht1Habilitado = true, dht2Habilitado = true, dht3Habilitado = true, dht4Habilitado = true;
+    AsignacionZona asignacionAtriles;
+    AsignacionZona asignacionDescanso;
     bool mq1Habilitado = true, mq2Habilitado = true;
     // Versión monotónica local (solo para detectar "hubo cambios que persistir en NVS", NO se usa
     // para arbitrar conflictos con el servidor: el servidor SIEMPRE gana, decisión explícita del usuario).

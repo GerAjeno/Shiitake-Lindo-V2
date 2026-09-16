@@ -81,7 +81,7 @@ export default function DashboardPage() {
               subtitulo="Cultivo Principal y Crecimiento de Hongos Shiitake"
               telemetria={actual?.atriles}
               configuracion={configuracion?.atriles}
-              sensoresNombres={["SHT35 #1", "SHT35 #2", "MQ-135 #1"]}
+              sensoresNombres={[...(configuracion?.asignacionSensores.atriles ?? []), "MQ-135 #1"]}
               co2Deshabilitado={configuracion?.sensoresHabilitados?.mq1 === false}
               colorTema="cyan"
               puedeControlar={puedeControlar}
@@ -92,7 +92,7 @@ export default function DashboardPage() {
               subtitulo="Zona de Reposo, Incubación y Mantenimiento"
               telemetria={actual?.descanso}
               configuracion={configuracion?.descanso}
-              sensoresNombres={["SHT35 #3", "SHT35 #4", "MQ-135 #2"]}
+              sensoresNombres={[...(configuracion?.asignacionSensores.descanso ?? []), "MQ-135 #2"]}
               co2Deshabilitado={configuracion?.sensoresHabilitados?.mq2 === false}
               colorTema="emerald"
               puedeControlar={puedeControlar}
@@ -101,7 +101,7 @@ export default function DashboardPage() {
           </div>
 
           <SystemStatusCard actual={actual} espOnline={espOnline} ultimaTelemetriaTs={ultimaTelemetriaTs} />
-          <SensorHealthMatrix sensores={sensores} />
+          <SensorHealthMatrix sensores={sensores} asignacionSensores={configuracion?.asignacionSensores} />
 
           <div className="flex items-center justify-between text-xs text-slate-500 font-mono pt-4">
             <span className="flex items-center gap-1.5">

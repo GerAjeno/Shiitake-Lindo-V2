@@ -2,19 +2,21 @@
 
 /**
  * @file SensorHealthMatrix.tsx
- * @description Matriz de salud individual para cada sensor (SHT35 #1-4, MQ #1-2). Reconstruida
- * a partir del sistema anterior — indica claramente cuál sensor específico falló.
+ * @description Matriz de salud individual para cada sensor del pool de 6 (DHT1/DHT2 + SHT1-4,
+ * ver Shared/types.ts) más los MQ #1-2. Indica claramente cuál sensor específico falló, y a qué
+ * zona está asignado hoy (la asignación es config libre del usuario, no una relación fija).
  */
 
 import React from "react";
 import { CheckCircle2, AlertTriangle, XCircle, Activity } from "lucide-react";
-import type { MatrizSensores, EstadoSensor } from "@shared/types";
+import type { MatrizSensores, EstadoSensor, ConfiguracionSistema, IdSensorTempHum } from "@shared/types";
 
 interface Props {
   sensores: MatrizSensores | null;
+  asignacionSensores?: ConfiguracionSistema["asignacionSensores"];
 }
 
-export function SensorHealthMatrix({ sensores }: Props) {
+export function SensorHealthMatrix({ sensores, asignacionSensores }: Props) {
   if (!sensores) {
     return (
       <div className="p-6 glass-panel flex items-center justify-center text-slate-500 font-mono text-sm">
@@ -23,11 +25,19 @@ export function SensorHealthMatrix({ sensores }: Props) {
     );
   }
 
+  const zonaDe = (id: IdSensorTempHum): string => {
+    if (asignacionSensores?.atriles.includes(id)) return "Temp / Humedad (Atriles)";
+    if (asignacionSensores?.descanso.includes(id)) return "Temp / Humedad (Descanso)";
+    return "Sin asignar a ninguna zona";
+  };
+
   const listaSensores = [
-    { id: "Humedad SHT35 #1", tipo: "Temp / Humedad (Atriles)", estado: sensores.dht1.estado, valor: `${sensores.dht1.humedad}% RH | ${sensores.dht1.temperatura}°C` },
-    { id: "Humedad SHT35 #2", tipo: "Temp / Humedad (Atriles)", estado: sensores.dht2.estado, valor: `${sensores.dht2.humedad}% RH | ${sensores.dht2.temperatura}°C` },
-    { id: "Humedad SHT35 #3", tipo: "Temp / Humedad (Descanso)", estado: sensores.dht3.estado, valor: `${sensores.dht3.humedad}% RH | ${sensores.dht3.temperatura}°C` },
-    { id: "Humedad SHT35 #4", tipo: "Temp / Humedad (Descanso)", estado: sensores.dht4.estado, valor: `${sensores.dht4.humedad}% RH | ${sensores.dht4.temperatura}°C` },
+    { id: "Humedad DHT1", tipo: zonaDe("DHT1"), estado: sensores.dht1.estado, valor: `${sensores.dht1.humedad}% RH | ${sensores.dht1.temperatura}°C` },
+    { id: "Humedad DHT2", tipo: zonaDe("DHT2"), estado: sensores.dht2.estado, valor: `${sensores.dht2.humedad}% RH | ${sensores.dht2.temperatura}°C` },
+    { id: "Humedad SHT1", tipo: zonaDe("SHT1"), estado: sensores.sht1.estado, valor: `${sensores.sht1.humedad}% RH | ${sensores.sht1.temperatura}°C` },
+    { id: "Humedad SHT2", tipo: zonaDe("SHT2"), estado: sensores.sht2.estado, valor: `${sensores.sht2.humedad}% RH | ${sensores.sht2.temperatura}°C` },
+    { id: "Humedad SHT3", tipo: zonaDe("SHT3"), estado: sensores.sht3.estado, valor: `${sensores.sht3.humedad}% RH | ${sensores.sht3.temperatura}°C` },
+    { id: "Humedad SHT4", tipo: zonaDe("SHT4"), estado: sensores.sht4.estado, valor: `${sensores.sht4.humedad}% RH | ${sensores.sht4.temperatura}°C` },
     { id: "Calidad de Aire MQ-135 #1", tipo: "Calidad Aire (Atriles)", estado: sensores.mq1.estado, valor: `Analógico: ${sensores.mq1.valorCrudo} ADC (${sensores.mq1.nivel})` },
     { id: "Calidad de Aire MQ-135 #2", tipo: "Calidad Aire (Descanso)", estado: sensores.mq2.estado, valor: `Analógico: ${sensores.mq2.valorCrudo} ADC (${sensores.mq2.nivel})` },
   ];
