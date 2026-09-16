@@ -31,16 +31,22 @@ export function SensorHealthMatrix({ sensores, asignacionSensores }: Props) {
     return "Sin asignar a ninguna zona";
   };
 
+  const estaAsignado = (id: IdSensorTempHum): boolean =>
+    Boolean(asignacionSensores?.atriles.includes(id) || asignacionSensores?.descanso.includes(id));
+
+  // Solo se muestran los sensores del pool (DHT/SHT) que hoy están asignados a alguna zona — uno
+  // sin asignar no se lee ni se usa para control, así que mostrarlo acá sería ruido. Los MQ135 no
+  // son parte de este pool configurable (siempre mq1->Atriles, mq2->Descanso), se muestran siempre.
   const listaSensores = [
-    { id: "Humedad DHT1", tipo: zonaDe("DHT1"), estado: sensores.dht1.estado, valor: `${sensores.dht1.humedad}% RH | ${sensores.dht1.temperatura}°C` },
-    { id: "Humedad DHT2", tipo: zonaDe("DHT2"), estado: sensores.dht2.estado, valor: `${sensores.dht2.humedad}% RH | ${sensores.dht2.temperatura}°C` },
-    { id: "Humedad SHT1", tipo: zonaDe("SHT1"), estado: sensores.sht1.estado, valor: `${sensores.sht1.humedad}% RH | ${sensores.sht1.temperatura}°C` },
-    { id: "Humedad SHT2", tipo: zonaDe("SHT2"), estado: sensores.sht2.estado, valor: `${sensores.sht2.humedad}% RH | ${sensores.sht2.temperatura}°C` },
-    { id: "Humedad SHT3", tipo: zonaDe("SHT3"), estado: sensores.sht3.estado, valor: `${sensores.sht3.humedad}% RH | ${sensores.sht3.temperatura}°C` },
-    { id: "Humedad SHT4", tipo: zonaDe("SHT4"), estado: sensores.sht4.estado, valor: `${sensores.sht4.humedad}% RH | ${sensores.sht4.temperatura}°C` },
-    { id: "Calidad de Aire MQ-135 #1", tipo: "Calidad Aire (Atriles)", estado: sensores.mq1.estado, valor: `Analógico: ${sensores.mq1.valorCrudo} ADC (${sensores.mq1.nivel})` },
-    { id: "Calidad de Aire MQ-135 #2", tipo: "Calidad Aire (Descanso)", estado: sensores.mq2.estado, valor: `Analógico: ${sensores.mq2.valorCrudo} ADC (${sensores.mq2.nivel})` },
-  ];
+    { id: "Humedad DHT1", tipo: zonaDe("DHT1"), estado: sensores.dht1.estado, valor: `${sensores.dht1.humedad}% RH | ${sensores.dht1.temperatura}°C`, asignado: estaAsignado("DHT1") },
+    { id: "Humedad DHT2", tipo: zonaDe("DHT2"), estado: sensores.dht2.estado, valor: `${sensores.dht2.humedad}% RH | ${sensores.dht2.temperatura}°C`, asignado: estaAsignado("DHT2") },
+    { id: "Humedad SHT1", tipo: zonaDe("SHT1"), estado: sensores.sht1.estado, valor: `${sensores.sht1.humedad}% RH | ${sensores.sht1.temperatura}°C`, asignado: estaAsignado("SHT1") },
+    { id: "Humedad SHT2", tipo: zonaDe("SHT2"), estado: sensores.sht2.estado, valor: `${sensores.sht2.humedad}% RH | ${sensores.sht2.temperatura}°C`, asignado: estaAsignado("SHT2") },
+    { id: "Humedad SHT3", tipo: zonaDe("SHT3"), estado: sensores.sht3.estado, valor: `${sensores.sht3.humedad}% RH | ${sensores.sht3.temperatura}°C`, asignado: estaAsignado("SHT3") },
+    { id: "Humedad SHT4", tipo: zonaDe("SHT4"), estado: sensores.sht4.estado, valor: `${sensores.sht4.humedad}% RH | ${sensores.sht4.temperatura}°C`, asignado: estaAsignado("SHT4") },
+    { id: "Calidad de Aire MQ-135 #1", tipo: "Calidad Aire (Atriles)", estado: sensores.mq1.estado, valor: `Analógico: ${sensores.mq1.valorCrudo} ADC (${sensores.mq1.nivel})`, asignado: true },
+    { id: "Calidad de Aire MQ-135 #2", tipo: "Calidad Aire (Descanso)", estado: sensores.mq2.estado, valor: `Analógico: ${sensores.mq2.valorCrudo} ADC (${sensores.mq2.nivel})`, asignado: true },
+  ].filter((sn) => sn.asignado);
 
   const badgeEstado = (est: EstadoSensor) => {
     if (est === "OK") {
