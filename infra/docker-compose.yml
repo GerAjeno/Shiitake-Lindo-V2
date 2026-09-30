@@ -100,6 +100,12 @@ services:
     command: tunnel run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+      # Sin esto, cloudflared elige QUIC (sobre UDP) automáticamente. En esta red el UDP se corta
+      # tras períodos de inactividad ("failed to accept QUIC stream: timeout: no recent network
+      # activity" en los logs, 2026-09-30) y esas conexiones muertas dejaban pedidos colgados hasta
+      # el timeout de Cloudflare (error 524 en el navegador). HTTP/2 va sobre TCP, mucho más
+      # tolerante a este tipo de redes/NAT.
+      TUNNEL_TRANSPORT_PROTOCOL: http2
     depends_on:
       - caddy
 
